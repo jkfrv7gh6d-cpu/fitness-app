@@ -331,7 +331,6 @@ table.tgt td:first-child{text-align:left;font-size:12px;color:var(--t2);padding-
 <!-- Add Food Modal -->
 <div class="overlay" id="modal-food">
   <div class="sheet">
-    <div class="sh-handle"></div>
     <div class="sh-title" id="food-modal-title">Ajouter un aliment</div>
     <div class="mf"><div class="ml">Catégorie</div>
       <div class="cat-pick" id="cat-pick">
@@ -343,10 +342,10 @@ table.tgt td:first-child{text-align:left;font-size:12px;color:var(--t2);padding-
         <button class="cpb" data-cat="Dessert">Dessert</button>
       </div></div>
     <div class="mf"><div class="ml">Nom</div><input class="mi" id="f-name" type="text" placeholder="Ex : Saumon fumé"></div>
-    <div class="mf"><div class="ml">Kcal / 100g</div><input class="mi" id="f-kcal" type="text" inputmode="numeric" pattern="[0-9]*" placeholder="0"></div>
-    <div class="mf"><div class="ml">Glucides / 100g</div><input class="mi" id="f-gluc" type="text" inputmode="numeric" pattern="[0-9]*" placeholder="0"></div>
-    <div class="mf"><div class="ml">Lipides / 100g</div><input class="mi" id="f-lip" type="text" inputmode="numeric" pattern="[0-9]*" placeholder="0"></div>
-    <div class="mf"><div class="ml">Protéines / 100g</div><input class="mi" id="f-prot" type="text" inputmode="numeric" pattern="[0-9]*" placeholder="0"></div>
+    <div class="mf"><div class="ml">Kcal / 100g</div><input class="mi" id="f-kcal" type="text" inputmode="decimal" pattern="[0-9.,]*" placeholder="0"></div>
+    <div class="mf"><div class="ml">Glucides / 100g</div><input class="mi" id="f-gluc" type="text" inputmode="decimal" pattern="[0-9.,]*" placeholder="0"></div>
+    <div class="mf"><div class="ml">Lipides / 100g</div><input class="mi" id="f-lip" type="text" inputmode="decimal" pattern="[0-9.,]*" placeholder="0"></div>
+    <div class="mf"><div class="ml">Protéines / 100g</div><input class="mi" id="f-prot" type="text" inputmode="decimal" pattern="[0-9.,]*" placeholder="0"></div>
     <div class="m-actions">
       <button class="btn" onclick="closeModal('modal-food')">Annuler</button>
       <button class="btn btn-blue" onclick="saveFood()">Enregistrer</button>
@@ -1101,12 +1100,12 @@ document.querySelectorAll('.cpb').forEach(b=>b.addEventListener('click',()=>{
 }));
 function saveFood(){
   const name=document.getElementById('f-name').value.trim();
-  const kcal=parseFloat(document.getElementById('f-kcal').value);
+  const kcal=parseDecimal(document.getElementById('f-kcal').value);
   if(!name||!kcal){alert('Nom et kcal obligatoires');return;}
   const vals={name,cat:_aC,kcal,
-    gluc:parseFloat(document.getElementById('f-gluc').value)||0,
-    lip:parseFloat(document.getElementById('f-lip').value)||0,
-    prot:parseFloat(document.getElementById('f-prot').value)||0};
+    gluc:parseDecimal(document.getElementById('f-gluc').value),
+    lip:parseDecimal(document.getElementById('f-lip').value),
+    prot:parseDecimal(document.getElementById('f-prot').value)};
   if(_editFoodId){
     const f=gf(_editFoodId);
     if(f)Object.assign(f,vals);
@@ -1404,6 +1403,7 @@ function renderHistory(){
   document.getElementById('tab-history').innerHTML=html;
   drawChart();loadPhotos();loadNotes();
   initWeekSwipes();initMonthSwipes();
+  attachDecimalFix();
 }
 
 function monthHtml(k,mName){
@@ -1423,14 +1423,14 @@ function monthHtml(k,mName){
 }
 
 function wkFields(i,w){
-  const wt=parseFloat(w.weight)||0;
+  const wt=parseDecimal(w.weight);
   let macroBlock='';
   if(wt>0){
     const obj=w.objective||S.settings.objective||'Prise de masse';
     const coef=getCoefs()[obj]||DEFAULT_COEFS['Maintien'];
     const P=Math.round(wt*coef);const L=Math.round(wt*getLipCoef());
-    const G_ON=calculateGlucides(parseFloat(w.kcalOn)||0,P,L);
-    const G_OFF=calculateGlucides(parseFloat(w.kcalOff)||0,P,L);
+    const G_ON=calculateGlucides(parseDecimal(w.kcalOn),P,L);
+    const G_OFF=calculateGlucides(parseDecimal(w.kcalOff),P,L);
     macroBlock=`<div class="week-macros-auto">
       <div class="wma-item"><div class="wma-val pc">${P}g</div><div class="wma-lbl">Prot cible</div></div>
       <div class="wma-item"><div class="wma-val lc">${L}g</div><div class="wma-lbl">Lip cible</div></div>
@@ -1442,14 +1442,14 @@ function wkFields(i,w){
   <div class="hist-row"><span class="hist-lbl">Date</span>
     <input class="hist-inp set-date" type="date" value="${w.dateRaw||''}" onchange="updWk(${i},'dateRaw',this.value);updWk(${i},'date',this.value)"></div>
   <div class="hist-row"><span class="hist-lbl">Poids (kg)</span>
-    <input class="hist-inp" type="text" inputmode="numeric" pattern="[0-9]*" value="${w.weight||''}" placeholder="0,0" onchange="updWk(${i},'weight',this.value)"></div>
+    <input class="hist-inp" type="text" inputmode="decimal" pattern="[0-9.,]*" value="${w.weight||''}" placeholder="0,0" onchange="updWk(${i},'weight',this.value)"></div>
   <div class="hist-row"><span class="hist-lbl">Tour de taille (cm)</span>
-    <input class="hist-inp" type="text" inputmode="numeric" pattern="[0-9]*" value="${w.waist||''}" placeholder="0" onchange="updWk(${i},'waist',this.value)"></div>
+    <input class="hist-inp" type="text" inputmode="decimal" pattern="[0-9.,]*" value="${w.waist||''}" placeholder="0" onchange="updWk(${i},'waist',this.value)"></div>
   <div class="hist-row"><span class="hist-lbl">Objectif</span>
     <select class="hist-sel" onchange="updWk(${i},'objective',this.value)">
       ${['Prise de masse','Maintien','Sèche'].map(o=>`<option${w.objective===o?' selected':''}>${o}</option>`).join('')}
     </select></div>
-  ${['kcalOn:Kcal ON réelles','kcalOff:Kcal OFF réelles','protOn:Prot ON (g)','glucOn:Gluc ON (g)','lipOn:Lip ON (g)','protOff:Prot OFF (g)','glucOff:Gluc OFF (g)','lipOff:Lip OFF (g)'].map(s=>{const[f,l]=s.split(':');return`<div class="hist-row"><span class="hist-lbl">${l}</span><input class="hist-inp" type="text" inputmode="numeric" pattern="[0-9]*" value="${w[f]||''}" placeholder="0" onchange="updWk(${i},'${f}',this.value)"></div>`}).join('')}`;
+  ${['kcalOn:Kcal ON réelles','kcalOff:Kcal OFF réelles','protOn:Prot ON (g)','glucOn:Gluc ON (g)','lipOn:Lip ON (g)','protOff:Prot OFF (g)','glucOff:Gluc OFF (g)','lipOff:Lip OFF (g)'].map(s=>{const[f,l]=s.split(':');return`<div class="hist-row"><span class="hist-lbl">${l}</span><input class="hist-inp" type="text" inputmode="decimal" pattern="[0-9.,]*" value="${w[f]||''}" placeholder="0" onchange="updWk(${i},'${f}',this.value)"></div>`}).join('')}`;
 }
 
 function togWk(i){document.getElementById('wk-'+i)?.classList.toggle('open')}
@@ -1461,13 +1461,13 @@ function calculateGlucides(kcalReelles,protG,lipG){
   return Math.max(0,Math.round(gluc));
 }
 function autoFillWeekMacros(i){
-  const w=S.history[i];const wt=parseFloat(w.weight)||0;
+  const w=S.history[i];const wt=parseDecimal(w.weight);
   if(wt<=0)return;
   const obj=w.objective||S.settings.objective||'Prise de masse';
   const coef=getCoefs()[obj]||DEFAULT_COEFS['Maintien'];
   const P=Math.round(wt*coef),L=Math.round(wt*getLipCoef());
-  const G_ON=calculateGlucides(parseFloat(w.kcalOn)||0,P,L);
-  const G_OFF=calculateGlucides(parseFloat(w.kcalOff)||0,P,L);
+  const G_ON=calculateGlucides(parseDecimal(w.kcalOn),P,L);
+  const G_OFF=calculateGlucides(parseDecimal(w.kcalOff),P,L);
   w.protOn=P;w.lipOn=L;w.glucOn=G_ON;
   w.protOff=P;w.lipOff=L;w.glucOff=G_OFF;
 }
@@ -1483,6 +1483,7 @@ function updWk(i,f,v){
     // refresh the macro block + fields in this week card
     const body=document.querySelector(`#wk-${i} .week-body`);
     if(body)body.innerHTML=wkFields(i,S.history[i]);
+    attachDecimalFix();
     setTimeout(drawChart,100);
     // update date label
     const lbl=document.querySelector(`#wk-${i} .week-date-lbl`);
@@ -1627,7 +1628,7 @@ function drawChart(){
   canvas.width=W*devicePixelRatio;canvas.height=H*devicePixelRatio;
   ctx.scale(devicePixelRatio,devicePixelRatio);ctx.clearRect(0,0,W,H);
   if(entries.length<2){ctx.fillStyle='rgba(255,255,255,.3)';ctx.font='13px -apple-system';ctx.textAlign='center';ctx.fillText('Ajoutez au moins 2 semaines avec poids et date',W/2,H/2);return;}
-  const ws=entries.map(e=>parseFloat(e.weight));
+  const ws=entries.map(e=>parseDecimal(e.weight));
   const mn=Math.min(...ws)-1,mx=Math.max(...ws)+1;
   const p={l:38,r:12,t:14,b:26};const cW=W-p.l-p.r,cH=H-p.t-p.b;
   const xf=i=>p.l+i/(entries.length-1)*cW,yf=w=>p.t+cH-(w-mn)/(mx-mn)*cH;
@@ -1678,7 +1679,7 @@ function renderSettings(){
   document.getElementById('tab-settings').innerHTML=`
   <div class="set-sec"><div class="set-title">Profil</div><div class="card">
     <div class="set-row"><span class="set-lbl">Poids actuel (kg)</span>
-      <input class="set-inp" type="text" inputmode="numeric" pattern="[0-9]*" value="${s.weight}" oninput="updSet('weight',this.value)"></div>
+      <input class="set-inp" type="text" inputmode="decimal" pattern="[0-9.,]*" value="${s.weight}" oninput="updSet('weight',this.value)"></div>
     <div class="set-row"><span class="set-lbl">Objectif</span>
       <select class="set-sel" onchange="updSet('objective',this.value)">
         ${['Prise de masse','Maintien','Sèche'].map(o=>`<option${s.objective===o?' selected':''}>${o}</option>`).join('')}
@@ -1716,14 +1717,14 @@ function renderSettings(){
 
   <div class="set-sec"><div class="set-title">Kcal cibles Jour ON</div><div class="card"><div class="targets-wrap">
     <table class="tgt"><tr><th>Repas</th><th>Kcal</th></tr>
-    ${s.targetsOn.map((t,i)=>`<tr><td>${t.name}</td><td><input class="tgt-inp" type="text" inputmode="numeric" pattern="[0-9]*" value="${t.kcal}" oninput="updTgt('on',${i},'kcal',this.value)"></td></tr>`).join('')}
+    ${s.targetsOn.map((t,i)=>`<tr><td>${t.name}</td><td><input class="tgt-inp" type="text" inputmode="decimal" pattern="[0-9.,]*" value="${t.kcal}" oninput="updTgt('on',${i},'kcal',this.value)"></td></tr>`).join('')}
     </table></div>
     <div class="tgt-total" id="tgt-total-on">Total Jour ON&nbsp;: <span>${n0(s.targetsOn.reduce((a,t)=>a+(t.kcal||0),0))}</span> kcal</div>
   </div></div>
 
   <div class="set-sec"><div class="set-title">Kcal cibles Jour OFF</div><div class="card"><div class="targets-wrap">
     <table class="tgt"><tr><th>Repas</th><th>Kcal</th></tr>
-    ${s.targetsOff.map((t,i)=>`<tr><td>${t.name}</td><td><input class="tgt-inp" type="text" inputmode="numeric" pattern="[0-9]*" value="${t.kcal}" oninput="updTgt('off',${i},'kcal',this.value)"></td></tr>`).join('')}
+    ${s.targetsOff.map((t,i)=>`<tr><td>${t.name}</td><td><input class="tgt-inp" type="text" inputmode="decimal" pattern="[0-9.,]*" value="${t.kcal}" oninput="updTgt('off',${i},'kcal',this.value)"></td></tr>`).join('')}
     </table></div>
     <div class="tgt-total" id="tgt-total-off">Total Jour OFF&nbsp;: <span>${n0(s.targetsOff.reduce((a,t)=>a+(t.kcal||0),0))}</span> kcal</div>
   </div></div>
@@ -1753,7 +1754,7 @@ function renderSettings(){
 }
 
 function updSet(k,v){
-  if(k==='weight')S.settings[k]=parseFloat(v)||0;
+  if(k==='weight')S.settings[k]=parseDecimal(v);
   else S.settings[k]=v;
   saveLocal();
   refreshMacroBlocks();
@@ -1761,7 +1762,7 @@ function updSet(k,v){
 }
 function updTgt(day,i,f,v){
   const arr=day==='on'?S.settings.targetsOn:S.settings.targetsOff;
-  if(arr[i]){arr[i][f]=parseFloat(v)||0;
+  if(arr[i]){arr[i][f]=parseDecimal(v);
     // Sync meal targetKcal (matché par nom, plus robuste que par index)
     const meals=day==='on'?S.mealsOn:S.mealsOff;
     const meal=meals.find(m=>m.name===arr[i].name);
@@ -1828,7 +1829,7 @@ function silentRefresh(){
   try{
     google.accounts.oauth2.initTokenClient({
       client_id:GOOGLE_CLIENT_ID,scope:DRIVE_SCOPE,prompt:'',
-      callback:r=>{if(r.access_token){S.driveToken=r.access_token;localStorage.setItem('fv_drive_token',r.access_token);}},
+      callback:r=>{if(r.access_token){S.driveToken=r.access_token;localStorage.setItem('fv_drive_token',r.access_token);localStorage.setItem('fv_drive_token_time',String(Date.now()));}},
       error_callback:()=>{}
     }).requestAccessToken({prompt:''});
   }catch(e){}
@@ -1837,10 +1838,56 @@ function driveConnect(){
   if(!gsiReady){alert('Bibliothèque Google non chargée.');return;}
   google.accounts.oauth2.initTokenClient({
     client_id:GOOGLE_CLIENT_ID,scope:DRIVE_SCOPE,
-    callback:r=>{if(r.access_token){S.driveToken=r.access_token;localStorage.setItem('fv_drive_token',r.access_token);driveLoad();if(S.activeTab==='settings')renderSettings();}}
+    callback:r=>{if(r.access_token){S.driveToken=r.access_token;localStorage.setItem('fv_drive_token',r.access_token);localStorage.setItem('fv_drive_token_time',String(Date.now()));driveLoad();if(S.activeTab==='settings')renderSettings();}}
   }).requestAccessToken();
 }
-function driveDisco(){S.driveToken=null;S.driveFileId=null;localStorage.removeItem('fv_drive_token');if(S.activeTab==='settings')renderSettings();}
+function driveDisco(){S.driveToken=null;S.driveFileId=null;localStorage.removeItem('fv_drive_token');localStorage.removeItem('fv_drive_token_time');if(S.activeTab==='settings')renderSettings();}
+
+// ─── RENOUVELLEMENT SILENCIEUX DU TOKEN (expire au bout d'1h) ─────────────────
+function isGoogleTokenExpired(){
+  const loginTime=parseInt(localStorage.getItem('fv_drive_token_time')||'0');
+  if(!loginTime)return true;
+  const elapsed=(Date.now()-loginTime)/1000;
+  return elapsed>3400; // renouveler 200s avant l'expiration réelle (3600s)
+}
+function ensureValidGoogleToken(){
+  return new Promise(resolve=>{
+    if(!S.driveToken){resolve(false);return;}
+    if(!isGoogleTokenExpired()){resolve(true);return;}
+    if(!gsiReady){resolve(false);return;}
+    try{
+      google.accounts.oauth2.initTokenClient({
+        client_id:GOOGLE_CLIENT_ID,scope:DRIVE_SCOPE,prompt:'',
+        callback:r=>{
+          if(r.error||!r.access_token){resolve(false);return;}
+          S.driveToken=r.access_token;
+          localStorage.setItem('fv_drive_token',r.access_token);
+          localStorage.setItem('fv_drive_token_time',String(Date.now()));
+          resolve(true);
+        },
+        error_callback:()=>resolve(false)
+      }).requestAccessToken({prompt:''});
+    }catch(e){resolve(false);}
+  });
+}
+// Bouton "Réessayer" après une session expirée : force une reconnexion propre
+// (avec popup de consentement) puis relance la sync automatiquement.
+function handleReconnectAndRetry(){
+  if(!gsiReady){alert('Bibliothèque Google non chargée.');return;}
+  google.accounts.oauth2.initTokenClient({
+    client_id:GOOGLE_CLIENT_ID,scope:DRIVE_SCOPE,prompt:'consent',
+    callback:r=>{
+      if(!r.error&&r.access_token){
+        S.driveToken=r.access_token;
+        localStorage.setItem('fv_drive_token',r.access_token);
+        localStorage.setItem('fv_drive_token_time',String(Date.now()));
+        syncAndVerify();
+      }else{
+        showSyncModal('error',{reason:'Reconnexion à Google Drive annulée ou échouée.',showReconnect:true});
+      }
+    }
+  }).requestAccessToken({prompt:'consent'});
+}
 async function driveFindFile(){
   const r=await fetch('https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=name%3D%22fitness_data.json%22&fields=files(id)',{headers:{Authorization:'Bearer '+S.driveToken}});
   const d=await r.json();return d.files?.[0]?.id||null;
@@ -1987,7 +2034,7 @@ function showSyncModal(state,data){
       <div class="sync-modal-icon">❌</div>
       <div class="sync-modal-title">Synchronisation échouée</div>
       <div class="sync-modal-subtitle">${data.reason}<br>Vos données locales sont intactes sur cet appareil.</div>
-      <button class="sync-modal-btn danger" onclick="syncAndVerify()">Réessayer</button>
+      <button class="sync-modal-btn danger" onclick="${data.showReconnect?'handleReconnectAndRetry()':'syncAndVerify()'}">Réessayer</button>
       <button class="sync-modal-btn secondary" onclick="closeSyncModal()">Fermer</button>`;
   }
 }
@@ -2025,7 +2072,14 @@ function mapSyncError(msg){
 async function syncAndVerify(){
   showSyncModal('loading');
   try{
+    if(!S.driveToken)throw new Error('non connecté');
+    const tokenOK=await ensureValidGoogleToken();
+    if(!tokenOK){
+      showSyncModal('error',{reason:'Session Google expirée. Appuyez sur "Réessayer" pour vous reconnecter.',showReconnect:true});
+      return;
+    }
     const uploadResult=await drivePushVerified();
+    localStorage.setItem('fv_drive_token_time',String(Date.now()));
     const stats={
       semaines:S.history.length,
       moisPhotos:S.photoMonths.length,
@@ -2035,7 +2089,9 @@ async function syncAndVerify(){
     };
     showSyncModal('success',stats);
   }catch(err){
-    showSyncModal('error',{reason:mapSyncError(err.message)});
+    const reason=mapSyncError(err.message);
+    const showReconnect=err.message&&(err.message.includes('HTTP 401')||err.message.includes('HTTP 403'));
+    showSyncModal('error',{reason,showReconnect});
   }
 }
 
