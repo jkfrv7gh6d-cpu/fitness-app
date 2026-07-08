@@ -95,19 +95,27 @@ input[type=date]::-webkit-calendar-picker-indicator{filter:invert(1);opacity:.6;
 /* ─── FOOD LINES ─── */
 .food-line{padding:7px 0;border-bottom:1px solid rgba(255,255,255,.05)}
 .food-line:last-of-type{border-bottom:none}
-.fl-top{display:grid;grid-template-columns:58px 1fr 56px 26px;gap:5px;align-items:center}
+.fl-top{display:grid;grid-template-columns:58px 1fr 26px;gap:5px;align-items:center}
 .fl-cat{font-size:9px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.3px;line-height:1.3}
-.fl-sel,.fl-kcal{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.11);border-radius:9px;color:var(--text);min-height:40px;width:100%;font-size:13px}
+.fl-sel{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.11);border-radius:9px;color:var(--text);min-height:40px;width:100%;font-size:13px}
 .fl-sel{padding:8px 6px;appearance:none;-webkit-appearance:none}
-.fl-kcal{font-weight:700;padding:8px 4px;text-align:center}
-.fl-sel:focus,.fl-kcal:focus{outline:none;border-color:var(--blue)}
+.fl-sel:focus{outline:none;border-color:var(--blue)}
 .fl-rm{background:none;border:none;color:var(--t3);font-size:18px;cursor:pointer;padding:0;line-height:1;min-height:40px;display:flex;align-items:center;justify-content:center;width:26px}
 .fl-rm:active{color:var(--red)}
-.fl-macros{display:grid;grid-template-columns:repeat(4,1fr);gap:3px;margin-top:4px;padding:5px 6px;background:rgba(255,255,255,.03);border-radius:7px}
+.fl-macros{display:grid;grid-template-columns:repeat(4,1fr);gap:3px;margin-top:6px;padding:5px 6px;background:rgba(255,255,255,.03);border-radius:7px}
 .fl-mac{text-align:center}
 .fl-mac-l{font-size:8px;color:var(--t3);text-transform:uppercase;font-weight:700}
 .fl-mac-v{font-size:11px;font-weight:600;margin-top:1px}
 .pc{color:#64D2FF}.gc{color:#FFD60A}.lc{color:var(--orange)}
+
+/* Double champ g = kcal */
+.dual-input-row{display:flex;align-items:center;gap:6px;margin-top:6px}
+.input-field-wrap{display:flex;align-items:center;gap:4px;background:rgba(255,255,255,.08);border:.5px solid rgba(255,255,255,.15);border-radius:8px;padding:5px 8px;flex:1;transition:border-color .15s,background .15s;min-height:38px}
+.input-field-wrap:focus-within{border-color:rgba(99,179,237,.6);background:rgba(99,179,237,.08)}
+.input-field-wrap input{background:transparent;border:none;outline:none;color:#fff;font-size:13px;font-weight:600;width:100%;text-align:right}
+.input-field-wrap input:disabled{color:var(--t3)}
+.input-unit{font-size:11px;color:rgba(255,255,255,.4);white-space:nowrap;flex-shrink:0}
+.input-sep{font-size:12px;color:rgba(255,255,255,.25);flex-shrink:0}
 
 /* Add-line row */
 .add-line-row{display:flex;flex-wrap:wrap;gap:5px;margin-top:9px;padding-top:9px;border-top:1px solid rgba(255,255,255,.05)}
@@ -886,6 +894,44 @@ function foodLineMacrosHtml(mac){
     <div class="fl-mac"><div class="fl-mac-l" style="color:#FFD60A">G</div><div class="fl-mac-v gc" data-k="gluc">${mac?nf(mac.gluc,1):''}</div></div>
     <div class="fl-mac"><div class="fl-mac-l" style="color:var(--orange)">L</div><div class="fl-mac-v lc" data-k="lip">${mac?nf(mac.lip,1):''}</div></div>`;
 }
+// Aujourd'hui : kcal = valeur de référence sauvegardée (line.kcal). Les grammes
+// sont dérivés à la volée pour l'affichage, jamais stockés.
+function todayDualInputHtml(mealId,line){
+  const food=gf(line.foodId);
+  const kcalPer100=food?food.kcal:0;
+  const canGrams=!!(food&&kcalPer100>0);
+  const gramsVal=canGrams&&line.kcal?nf((line.kcal/kcalPer100)*100,1):'';
+  return`<div class="dual-input-row">
+    <div class="input-field-wrap">
+      <input class="grams-input" type="text" inputmode="decimal" pattern="[0-9.,]*" value="${gramsVal}" placeholder="${canGrams?'0':'—'}"
+        data-meal="${mealId}" data-line="${line.id}" oninput="onGramsChangeToday(this)"${canGrams?'':' disabled'}>
+      <span class="input-unit">g</span>
+    </div>
+    <span class="input-sep">=</span>
+    <div class="input-field-wrap">
+      <input class="kcal-input" type="text" inputmode="decimal" pattern="[0-9.,]*" value="${line.kcal||''}" placeholder="0"
+        data-meal="${mealId}" data-line="${line.id}" oninput="onKC(this)">
+      <span class="input-unit">kcal</span>
+    </div>
+  </div>`;
+}
+// Ne remplace jamais la valeur du champ actuellement focalisé — seulement son
+// jumeau (grams ou kcal), pour ne jamais perdre le focus/clavier iOS.
+function updateTodaySiblingInput(mealId,lineId,which){
+  const{line}=getML(mealId,lineId);
+  if(!line)return;
+  const food=gf(line.foodId);
+  const canGrams=!!(food&&food.kcal>0);
+  if(which==='grams'){
+    const el=document.querySelector(`.grams-input[data-meal="${mealId}"][data-line="${lineId}"]`);
+    if(!el)return;
+    el.disabled=!canGrams;
+    el.value=canGrams&&line.kcal?nf((line.kcal/food.kcal)*100,1):'';
+  }else{
+    const el=document.querySelector(`.kcal-input[data-meal="${mealId}"][data-line="${lineId}"]`);
+    if(el)el.value=line.kcal||'';
+  }
+}
 function renderToday(){
   const meals=S.dayType==='ON'?S.mealsOn:S.mealsOff;
 
@@ -919,10 +965,9 @@ function renderToday(){
           <select class="fl-sel" data-meal="${meal.id}" data-line="${line.id}" onchange="onFC(this)">
             <option value="">—</option>${opts}
           </select>
-          <input class="fl-kcal" type="text" inputmode="decimal" pattern="[0-9.,]*" value="${line.kcal||''}" placeholder="kcal"
-            data-meal="${meal.id}" data-line="${line.id}" oninput="onKC(this)">
           <button class="fl-rm" onclick="removeLine('${meal.id}','${line.id}')">×</button>
         </div>
+        ${todayDualInputHtml(meal.id,line)}
         <div class="fl-macros" id="mac-${meal.id}-${line.id}" style="display:${mac?'grid':'none'}">${foodLineMacrosHtml(mac)}</div>
       </div>`;
     });
@@ -997,13 +1042,27 @@ function onFC(sel){
   if(!line)return;
   line.foodId=sel.value||null;
   saveLocal();
+  updateTodaySiblingInput(sel.dataset.meal,sel.dataset.line,'grams');
   refreshTodayCalcs(sel.dataset.meal,sel.dataset.line);
 }
 function onKC(inp){
   const{line}=getML(inp.dataset.meal,inp.dataset.line);
   if(!line)return;
   line.kcal=parseDecimal(inp.value);
-  saveLocal(); // immediate save
+  saveLocal(); // immediate save — kcal reste la valeur stockée
+  updateTodaySiblingInput(inp.dataset.meal,inp.dataset.line,'grams');
+  refreshTodayCalcs(inp.dataset.meal,inp.dataset.line);
+}
+// Champ grammes (dérivé) modifié → recalcule et sauvegarde le kcal correspondant
+function onGramsChangeToday(inp){
+  const{line}=getML(inp.dataset.meal,inp.dataset.line);
+  if(!line)return;
+  const food=gf(line.foodId);
+  if(!food||!food.kcal)return; // désactivé dans ce cas, garde-fou
+  const g=parseDecimal(inp.value);
+  line.kcal=Math.round(g/100*food.kcal);
+  saveLocal();
+  updateTodaySiblingInput(inp.dataset.meal,inp.dataset.line,'kcal');
   refreshTodayCalcs(inp.dataset.meal,inp.dataset.line);
 }
 function addLine(mealId,cat){
@@ -1244,6 +1303,25 @@ function recIngMacrosHtml(mac){
     <div class="fl-mac"><div class="fl-mac-l" style="color:#FFD60A">G</div><div class="fl-mac-v gc" data-k="gluc">${mac?nf(mac.gluc,1):''}</div></div>
     <div class="fl-mac"><div class="fl-mac-l" style="color:var(--orange)">L</div><div class="fl-mac-v lc" data-k="lip">${mac?nf(mac.lip,1):''}</div></div>`;
 }
+// Recettes : grammes = valeur de référence sauvegardée (ing.grams). Le kcal
+// est dérivé à la volée pour l'affichage, jamais stocké.
+function recIngDualInputHtml(ing){
+  const food=gf(ing.foodId);
+  const kcalPer100=food?food.kcal:0;
+  const canKcal=!!(food&&kcalPer100>0);
+  const kcalVal=canKcal&&ing.grams?n0(ing.grams/100*kcalPer100):'';
+  return`<div class="dual-input-row">
+    <div class="input-field-wrap">
+      <input class="grams-input" type="text" inputmode="decimal" pattern="[0-9.,]*" value="${ing.grams||''}" placeholder="0" data-lid="${ing.id}" oninput="onRecIngGrams(this)">
+      <span class="input-unit">g</span>
+    </div>
+    <span class="input-sep">=</span>
+    <div class="input-field-wrap">
+      <input class="kcal-input" type="text" inputmode="decimal" pattern="[0-9.,]*" value="${kcalVal}" placeholder="${canKcal?'0':'—'}" data-lid="${ing.id}" oninput="onRecIngKcal(this)"${canKcal?'':' disabled'}>
+      <span class="input-unit">kcal</span>
+    </div>
+  </div>`;
+}
 function renderRecetteIngredients(){
   const wrap=document.getElementById('recette-ing-list');
   wrap.innerHTML=_recetteEdit.ingredients.map(ing=>{
@@ -1253,9 +1331,9 @@ function renderRecetteIngredients(){
       <div class="fl-top">
         <div class="fl-cat">${ing.cat}</div>
         <select class="fl-sel" data-lid="${ing.id}" onchange="onRecIngFood(this)"><option value="">—</option>${opts}</select>
-        <input class="fl-kcal" type="text" inputmode="decimal" pattern="[0-9.,]*" value="${ing.grams||''}" placeholder="g" data-lid="${ing.id}" oninput="onRecIngGrams(this)">
         <button class="fl-rm" onclick="removeRecetteIngredient('${ing.id}')">×</button>
       </div>
+      ${recIngDualInputHtml(ing)}
       <div class="fl-macros" id="rmac-${ing.id}" style="display:${mac?'grid':'none'}">${recIngMacrosHtml(mac)}</div>
     </div>`;
   }).join('');
@@ -1274,12 +1352,25 @@ function updateRecetteTotals(){
 }
 // Met à jour uniquement la ligne concernée + les totaux, sans reconstruire la
 // liste : l'input/select actif ne perd jamais le focus (clavier iOS reste ouvert).
-function updateRecetteIngredientRow(lid){
+// `which` précise le jumeau (grams|kcal) à rafraîchir — jamais celui en cours de frappe.
+function updateRecetteIngredientRow(lid,which){
   const ing=_recetteEdit.ingredients.find(i=>i.id===lid);
   if(!ing)return;
+  const food=gf(ing.foodId);
   const mac=ing.foodId&&ing.grams?cmFromGrams(ing.foodId,ing.grams):null;
   const box=document.getElementById(`rmac-${lid}`);
   if(box){box.style.display=mac?'grid':'none';box.innerHTML=recIngMacrosHtml(mac);}
+  if(which==='kcal'){
+    const el=document.querySelector(`.kcal-input[data-lid="${lid}"]`);
+    if(el){
+      const canKcal=!!(food&&food.kcal>0);
+      el.disabled=!canKcal;
+      el.value=canKcal&&ing.grams?n0(ing.grams/100*food.kcal):'';
+    }
+  }else if(which==='grams'){
+    const el=document.querySelector(`.grams-input[data-lid="${lid}"]`);
+    if(el)el.value=ing.grams||'';
+  }
   updateRecetteTotals();
 }
 function addRecetteIngredient(cat){
@@ -1292,11 +1383,21 @@ function removeRecetteIngredient(lid){
 }
 function onRecIngFood(sel){
   const ing=_recetteEdit.ingredients.find(i=>i.id===sel.dataset.lid);
-  if(ing){ing.foodId=sel.value||null;updateRecetteIngredientRow(sel.dataset.lid);}
+  if(ing){ing.foodId=sel.value||null;updateRecetteIngredientRow(sel.dataset.lid,'kcal');}
 }
 function onRecIngGrams(inp){
   const ing=_recetteEdit.ingredients.find(i=>i.id===inp.dataset.lid);
-  if(ing){ing.grams=parseDecimal(inp.value);updateRecetteIngredientRow(inp.dataset.lid);}
+  if(ing){ing.grams=parseDecimal(inp.value);updateRecetteIngredientRow(inp.dataset.lid,'kcal');}
+}
+// Champ kcal (dérivé) modifié → recalcule et sauvegarde les grammes correspondants
+function onRecIngKcal(inp){
+  const ing=_recetteEdit.ingredients.find(i=>i.id===inp.dataset.lid);
+  if(!ing)return;
+  const food=gf(ing.foodId);
+  if(!food||!food.kcal)return; // désactivé dans ce cas, garde-fou
+  const k=parseDecimal(inp.value);
+  ing.grams=Math.round((k/food.kcal)*100*10)/10;
+  updateRecetteIngredientRow(inp.dataset.lid,'grams');
 }
 
 async function pickRecettePhoto(e){
