@@ -155,7 +155,7 @@ input[type=date]::-webkit-calendar-picker-indicator{filter:invert(1);opacity:.6;
 .recette-outer.swipe-open .recette-card{transform:translateX(-88px)}
 .recette-del{position:absolute;right:-88px;top:0;bottom:0;width:88px;background:var(--red);border:none;color:#fff;font-size:13px;font-weight:700;cursor:pointer;z-index:0;transition:right .3s ease}
 .recette-outer.swipe-open .recette-del{right:0}
-.recette-card-photo{width:56px;height:56px;border-radius:12px;background:rgba(255,255,255,.08);overflow:hidden;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:24px}
+.recette-card-photo{position:relative;width:56px;height:56px;border-radius:12px;background:rgba(255,255,255,.08);overflow:hidden;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:24px}
 .recette-card-photo img{width:100%;height:100%;object-fit:cover}
 .recette-card-info{flex:1;min-width:0}
 .recette-card-name{font-size:15px;font-weight:600;color:#fff;margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -220,6 +220,7 @@ input[type=date]::-webkit-calendar-picker-indicator{filter:invert(1);opacity:.6;
 .ps-lbl{font-size:11px;color:var(--t2);font-weight:600;z-index:1;position:relative}
 .ps-ico{font-size:24px;margin-bottom:3px;z-index:1;position:relative}
 .photo-trash{position:absolute;top:5px;right:5px;z-index:10;background:rgba(0,0,0,.65);border:none;border-radius:50%;width:28px;height:28px;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#fff}
+.pending-badge{position:absolute;top:6px;right:6px;z-index:10;background:rgba(255,165,0,.85);border-radius:10px;padding:2px 6px;font-size:11px;font-weight:600;color:#fff}
 .month-notes{display:block;width:calc(100% - 26px);margin:8px 13px 13px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.11);border-radius:12px;padding:11px;color:var(--text);font-size:16px;resize:none;min-height:68px}
 .month-notes:focus{outline:none;border-color:var(--blue)}
 
@@ -692,7 +693,11 @@ function loadLocal(){
   TPL_OFF.forEach(tm=>{if(!S.mealsOff.find(m=>m.id===tm.id))S.mealsOff.push(dc(tm));});
   // Restore Drive token
   const tok=localStorage.getItem('fv_drive_token');
-  if(tok)S.driveToken=tok;
+  if(tok){
+    S.driveToken=tok;
+    // Migration : anciennes sessions sans le flag driveConnected
+    if(!localStorage.getItem('driveConnected'))localStorage.setItem('driveConnected','true');
+  }
 }
 
 // ─── PLAN DE RÉFÉRENCE (habituel, distinct d'Aujourd'hui) ─────────────────────
@@ -1246,7 +1251,7 @@ function renderRecettes(){
     const el=document.getElementById(`rc-photo-${r.id}`);
     if(!el)return;
     if(r.photoId){const url=await loadPhoto(r.photoId);if(url)el.innerHTML=`<img src="${url}" alt="">`;}
-    else if(r.photoLocal){const d=await dbGet(`recette_photo_${r.id}`);if(d)el.innerHTML=`<img src="${d}" alt="">`;}
+    else if(r.photoLocal){const d=await dbGet(`recette_photo_${r.id}`);if(d)el.innerHTML=`<img src="${d}" alt="">${pendingBadgeHtml(`recette_photo_${r.id}`)}`;}
   });
 }
 function confirmDelRecette(id){
@@ -1273,7 +1278,7 @@ async function openEditRecette(id){
   // Charger l'aperçu photo existant
   const preview=document.getElementById('recette-photo-zone');
   if(r.photoId){const url=await loadPhoto(r.photoId);if(url)setRecettePhotoPreview(url);}
-  else if(r.photoLocal){const d=await dbGet(`recette_photo_${r.id}`);if(d)setRecettePhotoPreview(d);}
+  else if(r.photoLocal){const d=await dbGet(`recette_photo_${r.id}`);if(d)setRecettePhotoPreview(d,isPendingUpload(`recette_photo_${r.id}`));}
 }
 function closeRecetteDetail(){
   _recetteEdit=null;
@@ -1289,13 +1294,21 @@ function fillRecetteDetailUI(){
     `<button class="al-btn" onclick="addRecetteIngredient('${cat}')">＋${cat==='Protéine'?'Prot':cat==='Glucide'?'Gluc':cat==='Légume'?'Légume':cat==='Lipide'?'Lip':cat==='Fruit'?'Fruit':'Dessert'}</button>`).join('');
   renderRecetteIngredients();
 }
-function setRecettePhotoPreview(url){
+function setRecettePhotoPreview(url,pending){
   const zone=document.getElementById('recette-photo-zone');
   document.getElementById('recette-photo-placeholder').style.display='none';
   document.getElementById('btn-delete-recette-photo').style.display='flex';
   let img=zone.querySelector('img');
   if(!img){img=document.createElement('img');zone.insertBefore(img,zone.firstChild);}
   img.src=url;
+  const existingBadge=zone.querySelector('.pending-badge');
+  if(existingBadge)existingBadge.remove();
+  if(pending){
+    const badge=document.createElement('div');
+    badge.className='pending-badge';
+    badge.textContent='📤';
+    zone.appendChild(badge);
+  }
 }
 function recIngMacrosHtml(mac){
   return`<div class="fl-mac"><div class="fl-mac-l">Kcal</div><div class="fl-mac-v" data-k="kcal">${mac?nf(mac.kcal,0):''}</div></div>
@@ -1402,40 +1415,47 @@ function onRecIngKcal(inp){
 
 async function pickRecettePhoto(e){
   if(e.target.closest('#btn-delete-recette-photo'))return;
-  const inp=document.createElement('input');inp.type='file';inp.accept='image/*,image/heic,image/heif';inp.capture='environment';
+  const inp=document.createElement('input');inp.type='file';inp.accept='image/*,image/heic,image/heif';
   inp.onchange=async()=>{
     const file=inp.files[0];if(!file)return;
-    if(S.driveToken){
-      document.getElementById('recette-photo-placeholder').textContent='⏳ Envoi…';
+    if(!_recetteEdit.id)_recetteEdit.id='recipe_'+Date.now();
+    const recipeId=_recetteEdit.id;
+    const localId=`recette_photo_${recipeId}`;
+    document.getElementById('recette-photo-placeholder').textContent='⏳ Envoi…';
+    // Toujours sauvegarder en local d'abord (filet de sécurité)
+    const localDataUrl=await fileToDataURL(file);
+    await dbPut(localId,localDataUrl);
+    const tokenOK=S.driveToken&&!isGoogleTokenExpired();
+    if(tokenOK){
       try{
         const compressed=await compressPhoto(file);
-        const fileId=await uploadPhotoToDrive(compressed,`recette_${Date.now()}.jpg`);
-        _recetteEdit.photoId=fileId;_recetteEdit.photoLocal=false;
+        const fileId=await uploadPhotoToDrive(compressed,`recette_${recipeId}_${Date.now()}.jpg`);
+        _recetteEdit.photoId=fileId;_recetteEdit.photoLocal=false;_recetteEdit._pendingLocalPhoto=null;
         await cachePhoto(fileId,compressed,Date.now());
+        removeFromPendingUploads(localId);
         setRecettePhotoPreview(URL.createObjectURL(compressed));
       }catch(err){
         console.warn('Upload photo recette:',err);
-        document.getElementById('recette-photo-placeholder').textContent='📷 Ajouter une photo';
-        alert('Échec de l\'envoi vers Google Drive.');
+        _recetteEdit.photoId=null;_recetteEdit.photoLocal=true;_recetteEdit._pendingLocalPhoto=localDataUrl;
+        addToPendingUploads(localId,'recette',recipeId,null);
+        setRecettePhotoPreview(localDataUrl,true);
       }
     }else{
-      const r=new FileReader();
-      r.onload=ev=>{
-        _recetteEdit.photoId=null;_recetteEdit.photoLocal=true;_recetteEdit._pendingLocalPhoto=ev.target.result;
-        setRecettePhotoPreview(ev.target.result);
-      };
-      r.readAsDataURL(file);
-      alert('Non connecté à Google Drive : la photo sera stockée uniquement sur cet appareil.');
+      _recetteEdit.photoId=null;_recetteEdit.photoLocal=true;_recetteEdit._pendingLocalPhoto=localDataUrl;
+      addToPendingUploads(localId,'recette',recipeId,null);
+      setRecettePhotoPreview(localDataUrl,true);
     }
   };inp.click();
 }
 function deleteRecettePhoto(){
   if(_recetteEdit.photoId)driveDeleteFile(_recetteEdit.photoId);
+  if(_recetteEdit.id)removeFromPendingUploads(`recette_photo_${_recetteEdit.id}`);
   _recetteEdit.photoId=null;_recetteEdit.photoLocal=false;_recetteEdit._pendingLocalPhoto=null;
   document.getElementById('recette-photo-placeholder').textContent='📷 Ajouter une photo';
   document.getElementById('recette-photo-placeholder').style.display='block';
   document.getElementById('btn-delete-recette-photo').style.display='none';
   document.querySelectorAll('#recette-photo-zone img').forEach(img=>img.remove());
+  document.querySelectorAll('#recette-photo-zone .pending-badge').forEach(b=>b.remove());
 }
 async function saveRecette(){
   const name=document.getElementById('recette-name').value.trim();
@@ -1660,44 +1680,49 @@ async function pickPhoto(k,pi){
   inp.onchange=async()=>{
     const file=inp.files[0];if(!file)return;
     const slotKey=`${k}_${pi}`;
+    const localId=`photo_${k}_${pi}`;
     const sl=document.getElementById(`ps-${k}-${pi}`);
-    if(S.driveToken){
-      // Connecté à Drive : compresser, uploader, garder le driveFileId + un cache local
-      if(sl)sl.innerHTML=`<span class="ps-ico">⏳</span><span class="ps-lbl">Envoi…</span>`;
+    if(sl)sl.innerHTML=`<span class="ps-ico">⏳</span><span class="ps-lbl">Envoi…</span>`;
+    // Toujours sauvegarder en local d'abord (filet de sécurité)
+    const localDataUrl=await fileToDataURL(file);
+    await dbPut(localId,localDataUrl);
+    const tokenOK=S.driveToken&&!isGoogleTokenExpired();
+    if(tokenOK){
       try{
         const compressed=await compressPhoto(file);
         const fileId=await uploadPhotoToDrive(compressed,`${slotKey}_${Date.now()}.jpg`);
         setPhotoRef(slotKey,fileId);
         await cachePhoto(fileId,compressed,Date.now());
+        removeFromPendingUploads(localId);
         saveLocal();
         const url=URL.createObjectURL(compressed);
         if(sl)sl.innerHTML=`<img src="${url}" alt=""><button class="photo-trash" onclick="event.stopPropagation();removePhoto('${k}',${pi})">🗑️</button>`;
       }catch(e){
         console.warn('Upload photo Drive:',e);
-        if(sl)sl.innerHTML=`<span class="ps-ico">📷</span><span class="ps-lbl">${['Face','Côté G','Côté D','Dos'][pi]}</span>`;
-        alert('Échec de l\'envoi de la photo vers Google Drive.');
+        addToPendingUploads(localId,'historique',k,pi);
+        saveLocal();
+        if(sl)sl.innerHTML=`<img src="${localDataUrl}" alt=""><button class="photo-trash" onclick="event.stopPropagation();removePhoto('${k}',${pi})">🗑️</button>${pendingBadgeHtml(localId)}`;
       }
     }else{
-      // Pas connecté : stockage local uniquement (comportement historique)
-      const r=new FileReader();
-      r.onload=async ev=>{
-        await dbPut(`photo_${k}_${pi}`,ev.target.result);
-        saveLocal();
-        if(sl)sl.innerHTML=`<img src="${ev.target.result}" alt=""><button class="photo-trash" onclick="event.stopPropagation();removePhoto('${k}',${pi})">🗑️</button>`;
-      };r.readAsDataURL(file);
+      // Pas connecté / token expiré : mise en file d'attente, upload dès que possible
+      addToPendingUploads(localId,'historique',k,pi);
+      saveLocal();
+      if(sl)sl.innerHTML=`<img src="${localDataUrl}" alt=""><button class="photo-trash" onclick="event.stopPropagation();removePhoto('${k}',${pi})">🗑️</button>${pendingBadgeHtml(localId)}`;
     }
   };inp.click();
 }
 async function removePhoto(k,pi){
   showConfirm('Supprimer cette photo ?',async()=>{
     const slotKey=`${k}_${pi}`;
+    const localId=`photo_${k}_${pi}`;
     const refs=getPhotoRefs();
     const fileId=refs[slotKey];
     if(fileId){
       deletePhotoRef(slotKey);
       driveDeleteFile(fileId); // best-effort, non bloquant
     }
-    await dbDelete(`photo_${k}_${pi}`); // legacy local store, au cas où
+    removeFromPendingUploads(localId);
+    await dbDelete(localId); // legacy local store / cache local, au cas où
     saveLocal();
     const sl=document.getElementById(`ps-${k}-${pi}`);
     if(sl)sl.innerHTML=`<span class="ps-ico">📷</span><span class="ps-lbl">${['Face','Côté G','Côté D','Dos'][pi]}</span>`;
@@ -1708,15 +1733,16 @@ async function loadPhotos(){
   for(const sl of document.querySelectorAll('.photo-slot[id^="ps-"]')){
     const m=sl.id.match(/^ps-(.+)-(\d)$/);if(!m)continue;
     const slotKey=`${m[1]}_${m[2]}`;
+    const localId=`photo_${m[1]}_${m[2]}`;
     const fileId=refs[slotKey];
     if(fileId){
       const url=await loadPhoto(fileId);
       if(url)sl.innerHTML=`<img src="${url}" alt=""><button class="photo-trash" onclick="event.stopPropagation();removePhoto('${m[1]}',${m[2]})">🗑️</button>`;
       continue;
     }
-    // Fallback : photo stockée localement avant l'intégration Drive
-    const d=await dbGet(`photo_${m[1]}_${m[2]}`);
-    if(d)sl.innerHTML=`<img src="${d}" alt=""><button class="photo-trash" onclick="event.stopPropagation();removePhoto('${m[1]}',${m[2]})">🗑️</button>`;
+    // Fallback : photo stockée localement (pas encore sur Drive, ou avant l'intégration Drive)
+    const d=await dbGet(localId);
+    if(d)sl.innerHTML=`<img src="${d}" alt=""><button class="photo-trash" onclick="event.stopPropagation();removePhoto('${m[1]}',${m[2]})">🗑️</button>${pendingBadgeHtml(localId)}`;
   }
 }
 function saveNote(k,v){const n=JSON.parse(localStorage.getItem('fv_notes')||'{}');n[k]=v;localStorage.setItem('fv_notes',JSON.stringify(n))}
@@ -1922,27 +1948,17 @@ async function onClearCache(){
 // ─── GOOGLE DRIVE ────────────────────────────────────────────────────────────
 const gsi=document.createElement('script');
 gsi.src='https://accounts.google.com/gsi/client';
-gsi.onload=()=>{gsiReady=true;if(S.driveToken)silentRefresh();};
+gsi.onload=()=>{gsiReady=true;checkDriveConnectionOnStart();};
 document.head.appendChild(gsi);
 
-function silentRefresh(){
-  if(!gsiReady)return;
-  try{
-    google.accounts.oauth2.initTokenClient({
-      client_id:GOOGLE_CLIENT_ID,scope:DRIVE_SCOPE,prompt:'',
-      callback:r=>{if(r.access_token){S.driveToken=r.access_token;localStorage.setItem('fv_drive_token',r.access_token);localStorage.setItem('fv_drive_token_time',String(Date.now()));}},
-      error_callback:()=>{}
-    }).requestAccessToken({prompt:''});
-  }catch(e){}
-}
 function driveConnect(){
   if(!gsiReady){alert('Bibliothèque Google non chargée.');return;}
   google.accounts.oauth2.initTokenClient({
     client_id:GOOGLE_CLIENT_ID,scope:DRIVE_SCOPE,
-    callback:r=>{if(r.access_token){S.driveToken=r.access_token;localStorage.setItem('fv_drive_token',r.access_token);localStorage.setItem('fv_drive_token_time',String(Date.now()));driveLoad();if(S.activeTab==='settings')renderSettings();}}
+    callback:r=>{if(r.access_token){S.driveToken=r.access_token;localStorage.setItem('fv_drive_token',r.access_token);localStorage.setItem('fv_drive_token_time',String(Date.now()));localStorage.setItem('driveConnected','true');driveLoad();if(S.activeTab==='settings')renderSettings();}}
   }).requestAccessToken();
 }
-function driveDisco(){S.driveToken=null;S.driveFileId=null;localStorage.removeItem('fv_drive_token');localStorage.removeItem('fv_drive_token_time');if(S.activeTab==='settings')renderSettings();}
+function driveDisco(){S.driveToken=null;S.driveFileId=null;localStorage.removeItem('fv_drive_token');localStorage.removeItem('fv_drive_token_time');localStorage.removeItem('driveConnected');if(S.activeTab==='settings')renderSettings();}
 
 // ─── RENOUVELLEMENT SILENCIEUX DU TOKEN (expire au bout d'1h) ─────────────────
 function isGoogleTokenExpired(){
@@ -1951,26 +1967,74 @@ function isGoogleTokenExpired(){
   const elapsed=(Date.now()-loginTime)/1000;
   return elapsed>3400; // renouveler 200s avant l'expiration réelle (3600s)
 }
-function ensureValidGoogleToken(){
+// Primitive bas niveau : tente un renouvellement sans popup (prompt:''), avec
+// un timeout de sécurité (hors réseau / Google ne répond pas).
+function silentTokenRefresh(){
   return new Promise(resolve=>{
-    if(!S.driveToken){resolve(false);return;}
-    if(!isGoogleTokenExpired()){resolve(true);return;}
     if(!gsiReady){resolve(false);return;}
+    let done=false;
+    const finish=ok=>{if(done)return;done=true;resolve(ok)};
     try{
       google.accounts.oauth2.initTokenClient({
         client_id:GOOGLE_CLIENT_ID,scope:DRIVE_SCOPE,prompt:'',
         callback:r=>{
-          if(r.error||!r.access_token){resolve(false);return;}
+          if(r.error||!r.access_token){finish(false);return;}
           S.driveToken=r.access_token;
           localStorage.setItem('fv_drive_token',r.access_token);
           localStorage.setItem('fv_drive_token_time',String(Date.now()));
-          resolve(true);
+          localStorage.setItem('driveConnected','true');
+          finish(true);
         },
-        error_callback:()=>resolve(false)
+        error_callback:()=>finish(false)
       }).requestAccessToken({prompt:''});
-    }catch(e){resolve(false);}
+      setTimeout(()=>finish(false),5000);
+    }catch(e){finish(false)}
   });
 }
+function ensureValidGoogleToken(){
+  if(!S.driveToken)return Promise.resolve(false);
+  if(!isGoogleTokenExpired())return Promise.resolve(true);
+  return silentTokenRefresh();
+}
+function updateDriveStatusUI(connected){
+  if(!connected)S.driveToken=null;
+  if(S.activeTab==='settings')renderSettings();
+}
+function showDisconnectedBanner(){
+  if(document.getElementById('drive-banner'))return;
+  const banner=document.createElement('div');
+  banner.id='drive-banner';
+  banner.textContent='⚠️ Non connecté à Google Drive — données sauvegardées localement';
+  banner.style.cssText=`position:fixed;top:env(safe-area-inset-top,0px);left:0;right:0;background:rgba(255,165,0,.15);border-bottom:1px solid rgba(255,165,0,.3);color:rgba(255,200,100,.9);text-align:center;font-size:13px;padding:10px 16px;z-index:9999;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)`;
+  document.body.appendChild(banner);
+  setTimeout(()=>banner.remove(),4000);
+}
+async function checkDriveConnectionOnStart(){
+  const wasDriveConnected=localStorage.getItem('driveConnected')==='true';
+  if(!wasDriveConnected)return;
+  try{
+    const refreshed=await silentTokenRefresh();
+    if(refreshed){
+      updateDriveStatusUI(true);
+      processPendingPhotoUploads();
+    }else{
+      updateDriveStatusUI(false);
+      showDisconnectedBanner();
+    }
+  }catch(e){
+    updateDriveStatusUI(false);
+    showDisconnectedBanner();
+  }
+}
+window.addEventListener('online',async()=>{
+  const wasDriveConnected=localStorage.getItem('driveConnected')==='true';
+  if(!wasDriveConnected)return;
+  const refreshed=await silentTokenRefresh();
+  if(refreshed){
+    updateDriveStatusUI(true);
+    processPendingPhotoUploads();
+  }
+});
 // Bouton "Réessayer" après une session expirée : force une reconnexion propre
 // (avec popup de consentement) puis relance la sync automatiquement.
 function handleReconnectAndRetry(){
@@ -2060,6 +2124,59 @@ async function uploadPhotoToDrive(photoFile,photoName){
 async function driveDeleteFile(fileId){
   if(!S.driveToken||!fileId)return;
   try{await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}`,{method:'DELETE',headers:{Authorization:'Bearer '+S.driveToken}});}catch(e){}
+}
+function fileToDataURL(file){
+  return new Promise(resolve=>{const r=new FileReader();r.onload=ev=>resolve(ev.target.result);r.readAsDataURL(file)});
+}
+
+// ─── FILE D'ATTENTE PHOTOS (upload différé quand Drive est indisponible) ──────
+function getPendingUploads(){return JSON.parse(localStorage.getItem('pendingPhotoUploads')||'[]')}
+function addToPendingUploads(localId,context,contextId,photoSlot){
+  const pending=getPendingUploads();
+  if(pending.find(p=>p.localId===localId))return;
+  pending.push({localId,context,contextId,photoSlot,addedAt:Date.now()});
+  localStorage.setItem('pendingPhotoUploads',JSON.stringify(pending));
+}
+function removeFromPendingUploads(localId){
+  localStorage.setItem('pendingPhotoUploads',JSON.stringify(getPendingUploads().filter(p=>p.localId!==localId)));
+}
+function isPendingUpload(localId){return getPendingUploads().some(p=>p.localId===localId)}
+function pendingBadgeHtml(localId){return isPendingUpload(localId)?`<div class="pending-badge" data-local="${localId}">📤</div>`:''}
+function removePendingBadgeEl(localId){document.querySelectorAll(`.pending-badge[data-local="${localId}"]`).forEach(b=>b.remove())}
+
+async function processPendingPhotoUploads(){
+  if(!S.driveToken||isGoogleTokenExpired())return;
+  const pending=getPendingUploads();
+  if(!pending.length)return;
+  const remaining=[];
+  let anyUploaded=false;
+  for(const item of pending){
+    try{
+      const dataUrl=await dbGet(item.localId);
+      if(!dataUrl)continue; // blob introuvable → on retire de la file
+      const blob=await(await fetch(dataUrl)).blob();
+      const compressed=await compressPhoto(blob);
+      const photoName=`${item.context}_${item.contextId}_${Date.now()}.jpg`;
+      const driveId=await uploadPhotoToDrive(compressed,photoName);
+      await cachePhoto(driveId,compressed,Date.now());
+      if(item.context==='historique'){
+        setPhotoRef(`${item.contextId}_${item.photoSlot}`,driveId);
+      }else if(item.context==='recette'){
+        const r=S.recettes.find(x=>x.id===item.contextId);
+        if(r){r.photoId=driveId;r.photoLocal=false;}
+      }
+      removePendingBadgeEl(item.localId);
+      anyUploaded=true;
+    }catch(e){
+      remaining.push(item); // échec → on réessaiera la prochaine fois
+    }
+  }
+  localStorage.setItem('pendingPhotoUploads',JSON.stringify(remaining));
+  if(anyUploaded){
+    saveLocal();
+    if(S.activeTab==='history')renderHistory();
+    if(S.activeTab==='recettes')renderRecettes();
+  }
 }
 async function drivePush(){
   if(!S.driveToken)return null;
@@ -2189,6 +2306,7 @@ async function syncAndVerify(){
       timestamp:new Date(parseInt(localStorage.getItem('fv_lastSaved')||'0')).toLocaleString('fr-FR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'})
     };
     showSyncModal('success',stats);
+    processPendingPhotoUploads(); // profiter du token valide confirmé
   }catch(err){
     const reason=mapSyncError(err.message);
     const showReconnect=err.message&&(err.message.includes('HTTP 401')||err.message.includes('HTTP 403'));
