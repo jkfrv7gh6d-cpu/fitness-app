@@ -2,6 +2,9 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -648,6 +651,17 @@ function gf(id){return S.foods.find(f=>f.id===id)||null}
 function cm(foodId,kcal){
   const f=gf(foodId);if(!f||!kcal)return{gram:0,prot:0,gluc:0,lip:0};
   const g=(kcal/f.kcal)*100;return{gram:g,prot:g/100*f.prot,gluc:g/100*f.gluc,lip:g/100*f.lip};
+}
+// Détecte un état local "jamais configuré" (fraîchement installé / réinitialisé) :
+// aucun historique, aucune recette, aucun aliment ajouté au-delà de la base par
+// défaut, et des paramètres encore à leurs valeurs par défaut. Sert de garde-fou
+// pour ne JAMAIS écraser des données Drive réelles avec un état vide/par défaut.
+function isLocalDataEmpty(){
+  const noHistory=!(S.history&&S.history.length>0);
+  const noRecettes=!(S.recettes&&S.recettes.length>0);
+  const noCustomFoods=(S.foods||[]).length<=FD_DEFAULT.length;
+  const settingsAreDefault=!!(S.settings&&S.settings.weight===DS.weight&&S.settings.objective===DS.objective&&!S.settings.lastUpdate);
+  return noHistory&&noRecettes&&noCustomFoods&&settingsAreDefault;
 }
 function calcDailyMacros(){
   const w=parseFloat(S.settings.weight)||0;
@@ -2016,6 +2030,9 @@ async function checkDriveConnectionOnStart(){
     const refreshed=await silentTokenRefresh();
     if(refreshed){
       updateDriveStatusUI(true);
+      // Toujours tirer/comparer avec Drive au lancement (surtout après une mise à
+      // jour de l'app ou une réinstallation où le local peut être vide/par défaut)
+      await driveLoad();
       processPendingPhotoUploads();
     }else{
       updateDriveStatusUI(false);
@@ -2032,6 +2049,7 @@ window.addEventListener('online',async()=>{
   const refreshed=await silentTokenRefresh();
   if(refreshed){
     updateDriveStatusUI(true);
+    await driveLoad();
     processPendingPhotoUploads();
   }
 });
@@ -2180,6 +2198,7 @@ async function processPendingPhotoUploads(){
 }
 async function drivePush(){
   if(!S.driveToken)return null;
+  if(isLocalDataEmpty()){console.warn('Drive push annulé : données locales vides/par défaut.');return null;}
   const lastSaved=parseInt(localStorage.getItem('fv_lastSaved')||'0');
   const body=JSON.stringify({foods:S.foods,history:S.history,settings:S.settings,mealsOn:S.mealsOn,mealsOff:S.mealsOff,dayType:S.dayType,photoMonths:S.photoMonths,recettes:S.recettes,lastSaved});
   try{
@@ -2200,13 +2219,18 @@ async function driveLoad(){
   if(!S.driveToken)return;
   try{
     const fid=S.driveFileId||await driveFindFile();
-    if(!fid){drivePush();return;}
+    if(!fid){
+      // Aucun fichier sur Drive : on ne pousse que si on a de vraies données locales
+      if(!isLocalDataEmpty())drivePush();
+      return;
+    }
     S.driveFileId=fid;
     const d=await(await fetch(`https://www.googleapis.com/drive/v3/files/${fid}?alt=media`,{headers:{Authorization:'Bearer '+S.driveToken}})).json();
     const driveTs=d?.lastSaved||0;
     const localTs=parseInt(localStorage.getItem('fv_lastSaved')||'0');
-    if(driveTs>localTs){
-      // Drive plus récent → on applique ses données
+    const localEmpty=isLocalDataEmpty();
+    if(localEmpty||driveTs>localTs){
+      // Local vide (règle absolue), OU Drive plus récent → on applique ses données
       if(d.foods)S.foods=d.foods;if(d.history)S.history=d.history;
       if(d.settings)S.settings=d.settings;if(d.mealsOn)S.mealsOn=d.mealsOn;
       if(d.mealsOff)S.mealsOff=d.mealsOff;if(d.dayType)S.dayType=d.dayType;
@@ -2215,9 +2239,9 @@ async function driveLoad(){
       saveLocal();
       localStorage.setItem('fv_lastSaved',String(driveTs));
       renderTab(S.activeTab);
-      console.log('Données restaurées depuis Google Drive (plus récentes)');
+      console.log(localEmpty?'Données restaurées depuis Google Drive (local vide)':'Données restaurées depuis Google Drive (plus récentes)');
     }else{
-      // Local plus récent ou égal → on garde le local et on réuploade vers Drive
+      // Local plus récent ou égal, et non vide → on garde le local et on réuploade
       drivePush();
       console.log('Données locales conservées (plus récentes). Upload vers Drive.');
     }
@@ -2289,6 +2313,12 @@ function mapSyncError(msg){
 }
 async function syncAndVerify(){
   showSyncModal('loading');
+  // Sécurité absolue : ne jamais pousser des données vides/par défaut vers Drive
+  // (écraserait une sauvegarde réelle, ex. après une réinstallation de l'app)
+  if(isLocalDataEmpty()){
+    showSyncModal('error',{reason:'Aucune donnée locale à synchroniser. Reconnectez-vous à Drive pour restaurer vos données.'});
+    return;
+  }
   try{
     if(!S.driveToken)throw new Error('non connecté');
     const tokenOK=await ensureValidGoogleToken();
