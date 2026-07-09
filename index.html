@@ -888,23 +888,33 @@ function gaugesBlockHtml(){
     ${gaugeHtml('g-gluc','🌾',tG,gTgt,'g','Glucides')}
     ${gaugeHtml('g-lip','🥑',tL,dm.L,'g','Lipides')}`;
 }
+// Source unique de vérité pour la cible kcal d'un repas : S.settings (jamais
+// meal.targetKcal, qui peut rester périmé après une modif dans Paramètres ou
+// une restauration depuis Drive/plan de référence/template).
+function getMealTargetKcal(meal){
+  const arr=S.dayType==='ON'?S.settings.targetsOn:S.settings.targetsOff;
+  const t=(arr||[]).find(x=>x.name===meal.name);
+  return t?.kcal??null;
+}
 function mealHeaderHtml(meal){
   const mK=meal.lines.reduce((s,l)=>s+(l.kcal||0),0);
-  const hasTarget=meal.targetKcal!=null&&meal.targetKcal>0;
-  const diff=hasTarget?mK-meal.targetKcal:0;
+  const tgKcal=getMealTargetKcal(meal);
+  const hasTarget=tgKcal!=null&&tgKcal>0;
+  const diff=hasTarget?mK-tgKcal:0;
   const ok=Math.abs(diff)<=15;
   const tolHtml=hasTarget&&mK>0?`<span class="tol ${ok?'tol-ok':diff>0?'tol-over':'tol-warn'}">${ok?'✅':diff>0?`⚠️ +${Math.round(diff)}`:`⚠️ ${Math.round(diff)}`}</span>`:'';
   return`<span class="meal-cur">${n0(mK)}</span>
-    ${hasTarget?`<span class="meal-tgt">/ ${n0(meal.targetKcal)} kcal</span>${tolHtml}`:`<span class="meal-tgt">kcal · optionnel</span>`}`;
+    ${hasTarget?`<span class="meal-tgt">/ ${n0(tgKcal)} kcal</span>${tolHtml}`:`<span class="meal-tgt">kcal · optionnel</span>`}`;
 }
 function mealProgHtml(meal){
   const mK=meal.lines.reduce((s,l)=>s+(l.kcal||0),0);
-  const hasTarget=meal.targetKcal!=null&&meal.targetKcal>0;
+  const tgKcal=getMealTargetKcal(meal);
+  const hasTarget=tgKcal!=null&&tgKcal>0;
   if(!hasTarget)return'';
-  const diff=mK-meal.targetKcal;
+  const diff=mK-tgKcal;
   const ok=Math.abs(diff)<=15;
-  const prog=Math.min(100,(mK/meal.targetKcal)*100);
-  const progColor=ok&&mK>0?'var(--green)':mK>meal.targetKcal?'var(--red)':'var(--blue)';
+  const prog=Math.min(100,(mK/tgKcal)*100);
+  const progColor=ok&&mK>0?'var(--green)':mK>tgKcal?'var(--red)':'var(--blue)';
   return`<div class="prog-wrap"><div class="prog" style="width:${prog}%;background:${progColor}"></div></div>`;
 }
 function foodLineMacrosHtml(mac){
@@ -2126,12 +2136,11 @@ async function getOrCreateDriveFolder(folderName){
 }
 async function uploadPhotoToDrive(photoFile,photoName){
   if(!S.driveToken)throw new Error('Non connecté à Google Drive');
-  const compressed=await compressPhoto(photoFile);
   const folderId=await getOrCreateDriveFolder('fitness_app_photos');
   const metadata={name:photoName||`photo_${Date.now()}.jpg`,parents:[folderId]};
   const form=new FormData();
   form.append('metadata',new Blob([JSON.stringify(metadata)],{type:'application/json'}));
-  form.append('file',compressed);
+  form.append('file',photoFile);
   const res=await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,size',{
     method:'POST',headers:{Authorization:'Bearer '+S.driveToken},body:form
   });
@@ -2199,8 +2208,12 @@ async function processPendingPhotoUploads(){
 async function drivePush(){
   if(!S.driveToken)return null;
   if(isLocalDataEmpty()){console.warn('Drive push annulé : données locales vides/par défaut.');return null;}
+  const tokenOK=await ensureValidGoogleToken();
+  if(!tokenOK){console.warn('Drive push annulé : token Google expiré, renouvellement échoué.');return null;}
   const lastSaved=parseInt(localStorage.getItem('fv_lastSaved')||'0');
-  const body=JSON.stringify({foods:S.foods,history:S.history,settings:S.settings,mealsOn:S.mealsOn,mealsOff:S.mealsOff,dayType:S.dayType,photoMonths:S.photoMonths,recettes:S.recettes,lastSaved});
+  const photoRefs=JSON.parse(localStorage.getItem('fv_photo_refs')||'{}');
+  const notes=JSON.parse(localStorage.getItem('fv_notes')||'{}');
+  const body=JSON.stringify({foods:S.foods,history:S.history,settings:S.settings,mealsOn:S.mealsOn,mealsOff:S.mealsOff,dayType:S.dayType,photoMonths:S.photoMonths,recettes:S.recettes,photoRefs,notes,lastSaved});
   try{
     let fid=S.driveFileId||await driveFindFile();
     let resp;
@@ -2236,8 +2249,9 @@ async function driveLoad(){
       if(d.mealsOff)S.mealsOff=d.mealsOff;if(d.dayType)S.dayType=d.dayType;
       if(d.photoMonths)S.photoMonths=d.photoMonths;
       if(d.recettes)S.recettes=d.recettes;
+      if(d.photoRefs)localStorage.setItem('fv_photo_refs',JSON.stringify(d.photoRefs));
+      if(d.notes)localStorage.setItem('fv_notes',JSON.stringify(d.notes));
       saveLocal();
-      localStorage.setItem('fv_lastSaved',String(driveTs));
       renderTab(S.activeTab);
       console.log(localEmpty?'Données restaurées depuis Google Drive (local vide)':'Données restaurées depuis Google Drive (plus récentes)');
     }else{
@@ -2289,7 +2303,9 @@ async function drivePushVerified(){
   if(!S.driveToken)throw new Error('non connecté');
   const lastSaved=Date.now();
   localStorage.setItem('fv_lastSaved',String(lastSaved));
-  const body=JSON.stringify({foods:S.foods,history:S.history,settings:S.settings,mealsOn:S.mealsOn,mealsOff:S.mealsOff,dayType:S.dayType,photoMonths:S.photoMonths,recettes:S.recettes,lastSaved});
+  const photoRefs=JSON.parse(localStorage.getItem('fv_photo_refs')||'{}');
+  const notes=JSON.parse(localStorage.getItem('fv_notes')||'{}');
+  const body=JSON.stringify({foods:S.foods,history:S.history,settings:S.settings,mealsOn:S.mealsOn,mealsOff:S.mealsOff,dayType:S.dayType,photoMonths:S.photoMonths,recettes:S.recettes,photoRefs,notes,lastSaved});
   let fid=S.driveFileId||await driveFindFile();
   if(!fid){
     const createResp=await fetch('https://www.googleapis.com/drive/v3/files',{method:'POST',headers:{Authorization:'Bearer '+S.driveToken,'Content-Type':'application/json'},body:JSON.stringify({name:'fitness_data.json',parents:['appDataFolder']})});
@@ -2344,13 +2360,7 @@ async function syncAndVerify(){
   }
 }
 
-// Empêcher le redimensionnement au clavier iOS
-window.addEventListener('resize', (e) => {
-  if (document.activeElement.tagName === 'INPUT' ||
-      document.activeElement.tagName === 'TEXTAREA') {
-    e.preventDefault();
-  }
-});
+// (comportement clavier iOS géré via mises à jour DOM in-place dans refreshTodayCalcs)
 
 // ─── BOOT ────────────────────────────────────────────────────────────────────
 (async()=>{
