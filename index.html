@@ -199,10 +199,11 @@ input[type=date]::-webkit-calendar-picker-indicator{filter:invert(1);opacity:.6;
 .week-wt-lbl{font-size:13px;color:var(--t2)}
 .week-body{display:none;padding:0 13px 13px}
 .week-card.open .week-body{display:block}
-.week-macros-auto{background:rgba(255,255,255,.04);border-radius:12px;padding:10px 12px;margin-bottom:8px;display:grid;grid-template-columns:repeat(2,1fr);gap:6px}
-.wma-item{text-align:center}
-.wma-val{font-size:16px;font-weight:700}
-.wma-lbl{font-size:10px;color:var(--t2);text-transform:uppercase}
+.wk-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px;padding-top:8px}
+.wk-cell{display:flex;flex-direction:column;gap:4px}
+.wk-lbl{font-size:11px;color:var(--t2)}
+.wk-grid .hist-inp{width:100%;text-align:left;box-sizing:border-box}
+.wk-grid .hist-sel{width:100%;box-sizing:border-box}
 .hist-row{display:flex;align-items:center;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.05)}
 .hist-row:last-child{border-bottom:none}
 .hist-lbl{flex:1;font-size:14px;color:var(--t2)}
@@ -1531,7 +1532,7 @@ function renderHistory(){
         <div class="week-hdr" onclick="togWk(${ri})">
           <div class="week-hdr-info">
             <div class="week-date-lbl">${wDisplay}</div>
-            <div class="week-wt-lbl">${w.weight?w.weight+' kg':'Poids non renseigné'}</div>
+            <div class="week-wt-lbl">${w.weight?w.weight+' kg':'Poids non renseigné'}${w.waist?' · '+w.waist+' cm':''}</div>
           </div><span class="chev">▼</span>
         </div>
         <div class="week-body">${wkFields(ri,w)}</div>
@@ -1571,33 +1572,22 @@ function monthHtml(k,mName){
 }
 
 function wkFields(i,w){
-  const wt=parseDecimal(w.weight);
-  let macroBlock='';
-  if(wt>0){
-    const obj=w.objective||S.settings.objective||'Prise de masse';
-    const coef=getCoefs()[obj]||DEFAULT_COEFS['Maintien'];
-    const P=Math.round(wt*coef);const L=Math.round(wt*getLipCoef());
-    const G_ON=calculateGlucides(parseDecimal(w.kcalOn),P,L);
-    const G_OFF=calculateGlucides(parseDecimal(w.kcalOff),P,L);
-    macroBlock=`<div class="week-macros-auto">
-      <div class="wma-item"><div class="wma-val pc">${P}g</div><div class="wma-lbl">Prot cible</div></div>
-      <div class="wma-item"><div class="wma-val lc">${L}g</div><div class="wma-lbl">Lip cible</div></div>
-      <div class="wma-item"><div class="wma-val gc">${G_ON}g</div><div class="wma-lbl">Gluc ON</div></div>
-      <div class="wma-item"><div class="wma-val gc">${G_OFF}g</div><div class="wma-lbl">Gluc OFF</div></div>
-    </div>`;
-  }
-  return macroBlock+`
-  <div class="hist-row"><span class="hist-lbl">Date</span>
-    <input class="hist-inp set-date" type="date" value="${w.dateRaw||''}" onchange="updWk(${i},'dateRaw',this.value);updWk(${i},'date',this.value)"></div>
-  <div class="hist-row"><span class="hist-lbl">Poids (kg)</span>
-    <input class="hist-inp" type="text" inputmode="decimal" pattern="[0-9.,]*" value="${w.weight||''}" placeholder="0,0" onchange="updWk(${i},'weight',this.value)"></div>
-  <div class="hist-row"><span class="hist-lbl">Tour de taille (cm)</span>
-    <input class="hist-inp" type="text" inputmode="decimal" pattern="[0-9.,]*" value="${w.waist||''}" placeholder="0" onchange="updWk(${i},'waist',this.value)"></div>
-  <div class="hist-row"><span class="hist-lbl">Objectif</span>
-    <select class="hist-sel" onchange="updWk(${i},'objective',this.value)">
-      ${['Prise de masse','Maintien','Sèche'].map(o=>`<option${w.objective===o?' selected':''}>${o}</option>`).join('')}
-    </select></div>
-  ${['kcalOn:Kcal ON réelles','kcalOff:Kcal OFF réelles','protOn:Prot ON (g)','glucOn:Gluc ON (g)','lipOn:Lip ON (g)','protOff:Prot OFF (g)','glucOff:Gluc OFF (g)','lipOff:Lip OFF (g)'].map(s=>{const[f,l]=s.split(':');return`<div class="hist-row"><span class="hist-lbl">${l}</span><input class="hist-inp" type="text" inputmode="decimal" pattern="[0-9.,]*" value="${w[f]||''}" placeholder="0" onchange="updWk(${i},'${f}',this.value)"></div>`}).join('')}`;
+  return`<div class="wk-grid">
+    <div class="wk-cell"><span class="wk-lbl">Date</span>
+      <input class="hist-inp set-date" type="date" value="${w.dateRaw||''}" onchange="updWk(${i},'dateRaw',this.value);updWk(${i},'date',this.value)"></div>
+    <div class="wk-cell"><span class="wk-lbl">Poids (kg)</span>
+      <input class="hist-inp" type="text" inputmode="decimal" pattern="[0-9.,]*" value="${w.weight||''}" placeholder="0,0" onchange="updWk(${i},'weight',this.value)"></div>
+    <div class="wk-cell"><span class="wk-lbl">Tour de taille (cm)</span>
+      <input class="hist-inp" type="text" inputmode="decimal" pattern="[0-9.,]*" value="${w.waist||''}" placeholder="0" onchange="updWk(${i},'waist',this.value)"></div>
+    <div class="wk-cell"><span class="wk-lbl">Objectif</span>
+      <select class="hist-sel" onchange="updWk(${i},'objective',this.value)">
+        ${['Prise de masse','Maintien','Sèche'].map(o=>`<option${w.objective===o?' selected':''}>${o}</option>`).join('')}
+      </select></div>
+    <div class="wk-cell"><span class="wk-lbl">Kcal ON réelles</span>
+      <input class="hist-inp" type="text" inputmode="decimal" pattern="[0-9.,]*" value="${w.kcalOn||''}" placeholder="0" onchange="updWk(${i},'kcalOn',this.value)"></div>
+    <div class="wk-cell"><span class="wk-lbl">Kcal OFF réelles</span>
+      <input class="hist-inp" type="text" inputmode="decimal" pattern="[0-9.,]*" value="${w.kcalOff||''}" placeholder="0" onchange="updWk(${i},'kcalOff',this.value)"></div>
+  </div>`;
 }
 
 function togWk(i){document.getElementById('wk-'+i)?.classList.toggle('open')}
@@ -1608,41 +1598,24 @@ function calculateGlucides(kcalReelles,protG,lipG){
   const gluc=(kcalReelles-protG*4-lipG*9)/4;
   return Math.max(0,Math.round(gluc));
 }
-function autoFillWeekMacros(i){
-  const w=S.history[i];const wt=parseDecimal(w.weight);
-  if(wt<=0)return;
-  const obj=w.objective||S.settings.objective||'Prise de masse';
-  const coef=getCoefs()[obj]||DEFAULT_COEFS['Maintien'];
-  const P=Math.round(wt*coef),L=Math.round(wt*getLipCoef());
-  const G_ON=calculateGlucides(parseDecimal(w.kcalOn),P,L);
-  const G_OFF=calculateGlucides(parseDecimal(w.kcalOff),P,L);
-  w.protOn=P;w.lipOn=L;w.glucOn=G_ON;
-  w.protOff=P;w.lipOff=L;w.glucOff=G_OFF;
-}
+function autoFillWeekMacros(i){}
 function updWk(i,f,v){
   if(!S.history[i])return;
   S.history[i][f]=v;
-  // For date display, convert YYYY-MM-DD to display format
   if(f==='dateRaw'&&v){S.history[i].date=v;}
-  const triggersRecalc=['weight','objective','kcalOn','kcalOff'].includes(f);
-  if(triggersRecalc)autoFillWeekMacros(i);
   saveLocal();
-  if(triggersRecalc){
-    // refresh the macro block + fields in this week card
-    const body=document.querySelector(`#wk-${i} .week-body`);
-    if(body)body.innerHTML=wkFields(i,S.history[i]);
-    attachDecimalFix();
-    setTimeout(drawChart,100);
-    // update date label
-    const lbl=document.querySelector(`#wk-${i} .week-date-lbl`);
-    if(lbl)lbl.textContent=S.history[i].date?fmtDate(S.history[i].date):'— date —';
-    const wlbl=document.querySelector(`#wk-${i} .week-wt-lbl`);
-    if(wlbl)wlbl.textContent=v&&f==='weight'?v+' kg':(S.history[i].weight?S.history[i].weight+' kg':'Poids non renseigné');
-  }
-  if(f==='date'||f==='dateRaw'){
+  if(['weight','dateRaw'].includes(f))setTimeout(drawChart,100);
+  if(f==='dateRaw'||f==='date'){
     const lbl=document.querySelector(`#wk-${i} .week-date-lbl`);
     if(lbl&&v)lbl.textContent=fmtDate(v);
-    setTimeout(drawChart,100);
+  }
+  if(f==='weight'||f==='waist'){
+    const wlbl=document.querySelector(`#wk-${i} .week-wt-lbl`);
+    if(wlbl){
+      const wt=S.history[i].weight;
+      const ws=S.history[i].waist;
+      wlbl.textContent=(wt?wt+' kg':'Poids non renseigné')+(ws?' · '+ws+' cm':'');
+    }
   }
 }
 function confirmDelWeek(i){
