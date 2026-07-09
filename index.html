@@ -260,6 +260,8 @@ table.tgt td:first-child{text-align:left;font-size:12px;color:var(--t2);padding-
 .coef-input-wrap input{width:60px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.15);border-radius:10px;color:#fff;font-size:15px;font-weight:600;text-align:center;padding:6px 8px;min-height:38px}
 .coef-input-wrap input:focus{outline:none;border-color:var(--blue)}
 .coef-unit{font-size:12px;color:rgba(255,255,255,.4);min-width:28px}
+.coef-save-btn{display:block;width:100%;margin-top:14px;padding:11px;background:var(--green);color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;transition:opacity .15s;min-height:44px}
+.coef-save-btn:disabled{opacity:.6}
 .coef-reset-btn{width:100%;margin-top:14px;padding:10px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);border-radius:12px;color:rgba(255,255,255,.5);font-size:13px;cursor:pointer;min-height:40px}
 
 /* Macros auto block */
@@ -452,6 +454,7 @@ function getLipCoef(){
 function saveCoefs(coefs,lipCoef){
   localStorage.setItem('macroCoefs',JSON.stringify(coefs));
   localStorage.setItem('lipCoef',String(lipCoef));
+  schedSync();
 }
 const CATS=['Protéine','Glucide','Légume','Lipide','Fruit','Dessert'];
 const CAT_CLR={'Protéine':'#64D2FF','Glucide':'#FFD60A','Légume':'#30D158','Lipide':'#FF9F0A','Fruit':'#FF6B6B','Dessert':'#BF5AF2'};
@@ -1852,6 +1855,7 @@ function renderSettings(){
         <div class="coef-label-header">Lipides (tous objectifs)</div>
         <div class="coef-row"><label>🥑 Coefficient lipides</label><div class="coef-input-wrap"><input id="coef-lip" type="text" inputmode="decimal" pattern="[0-9.]*" value="${lipCoef}" oninput="updCoef()"><span class="coef-unit">g/kg</span></div></div>
       </div>
+      <button id="btn-save-coefs" class="coef-save-btn" onclick="saveAndSyncCoefs()">💾 Sauvegarder les modifications</button>
       <button id="btn-reset-coefs" class="coef-reset-btn" onclick="resetCoefs()">Réinitialiser aux valeurs par défaut</button>
     </div>
   </div></div>
@@ -1946,6 +1950,16 @@ function resetCoefs(){
   saveCoefs({...DEFAULT_COEFS},DEFAULT_LIP_COEF);
   refreshMacroBlocks();
   if(S.activeTab==='today'){const o=getOpenMeals();renderToday();restoreOpenMeals(o);}
+}
+function saveAndSyncCoefs(){
+  updCoef(); // capture les valeurs actuelles des inputs et sauvegarde
+  const btn=document.getElementById('btn-save-coefs');
+  if(btn){
+    const original='💾 Sauvegarder les modifications';
+    btn.textContent='✅ Sauvegardé';
+    btn.disabled=true;
+    setTimeout(()=>{btn.textContent=original;btn.disabled=false;},2000);
+  }
 }
 function exportData(){const blob=new Blob([JSON.stringify({foods:S.foods,history:S.history,settings:S.settings,mealsOn:S.mealsOn,mealsOff:S.mealsOff,photoMonths:S.photoMonths,recettes:S.recettes},null,2)],{type:'application/json'});const a=Object.assign(document.createElement('a'),{href:URL.createObjectURL(blob),download:`fitness_${S.todayDate}.json`});a.click();URL.revokeObjectURL(a.href)}
 function resetData(){showConfirm('Réinitialiser TOUTES les données ?',()=>{localStorage.clear();loadLocal();initPlanReference();renderTab(S.activeTab)})}
@@ -2213,7 +2227,11 @@ async function drivePush(){
   const lastSaved=parseInt(localStorage.getItem('fv_lastSaved')||'0');
   const photoRefs=JSON.parse(localStorage.getItem('fv_photo_refs')||'{}');
   const notes=JSON.parse(localStorage.getItem('fv_notes')||'{}');
-  const body=JSON.stringify({foods:S.foods,history:S.history,settings:S.settings,mealsOn:S.mealsOn,mealsOff:S.mealsOff,dayType:S.dayType,photoMonths:S.photoMonths,recettes:S.recettes,photoRefs,notes,lastSaved});
+  const macroCoefs=localStorage.getItem('macroCoefs')?JSON.parse(localStorage.getItem('macroCoefs')):null;
+  const lipCoef=localStorage.getItem('lipCoef')?parseFloat(localStorage.getItem('lipCoef')):null;
+  const planRefOn=localStorage.getItem('fv_plan_reference_ON')?JSON.parse(localStorage.getItem('fv_plan_reference_ON')):null;
+  const planRefOff=localStorage.getItem('fv_plan_reference_OFF')?JSON.parse(localStorage.getItem('fv_plan_reference_OFF')):null;
+  const body=JSON.stringify({foods:S.foods,history:S.history,settings:S.settings,mealsOn:S.mealsOn,mealsOff:S.mealsOff,dayType:S.dayType,photoMonths:S.photoMonths,recettes:S.recettes,photoRefs,notes,macroCoefs,lipCoef,planRefOn,planRefOff,lastSaved});
   try{
     let fid=S.driveFileId||await driveFindFile();
     let resp;
@@ -2251,6 +2269,10 @@ async function driveLoad(){
       if(d.recettes)S.recettes=d.recettes;
       if(d.photoRefs)localStorage.setItem('fv_photo_refs',JSON.stringify(d.photoRefs));
       if(d.notes)localStorage.setItem('fv_notes',JSON.stringify(d.notes));
+      if(d.macroCoefs)localStorage.setItem('macroCoefs',JSON.stringify(d.macroCoefs));
+      if(d.lipCoef!=null)localStorage.setItem('lipCoef',String(d.lipCoef));
+      if(d.planRefOn)localStorage.setItem('fv_plan_reference_ON',JSON.stringify(d.planRefOn));
+      if(d.planRefOff)localStorage.setItem('fv_plan_reference_OFF',JSON.stringify(d.planRefOff));
       saveLocal();
       renderTab(S.activeTab);
       console.log(localEmpty?'Données restaurées depuis Google Drive (local vide)':'Données restaurées depuis Google Drive (plus récentes)');
@@ -2305,7 +2327,11 @@ async function drivePushVerified(){
   localStorage.setItem('fv_lastSaved',String(lastSaved));
   const photoRefs=JSON.parse(localStorage.getItem('fv_photo_refs')||'{}');
   const notes=JSON.parse(localStorage.getItem('fv_notes')||'{}');
-  const body=JSON.stringify({foods:S.foods,history:S.history,settings:S.settings,mealsOn:S.mealsOn,mealsOff:S.mealsOff,dayType:S.dayType,photoMonths:S.photoMonths,recettes:S.recettes,photoRefs,notes,lastSaved});
+  const macroCoefs=localStorage.getItem('macroCoefs')?JSON.parse(localStorage.getItem('macroCoefs')):null;
+  const lipCoef=localStorage.getItem('lipCoef')?parseFloat(localStorage.getItem('lipCoef')):null;
+  const planRefOn=localStorage.getItem('fv_plan_reference_ON')?JSON.parse(localStorage.getItem('fv_plan_reference_ON')):null;
+  const planRefOff=localStorage.getItem('fv_plan_reference_OFF')?JSON.parse(localStorage.getItem('fv_plan_reference_OFF')):null;
+  const body=JSON.stringify({foods:S.foods,history:S.history,settings:S.settings,mealsOn:S.mealsOn,mealsOff:S.mealsOff,dayType:S.dayType,photoMonths:S.photoMonths,recettes:S.recettes,photoRefs,notes,macroCoefs,lipCoef,planRefOn,planRefOff,lastSaved});
   let fid=S.driveFileId||await driveFindFile();
   if(!fid){
     const createResp=await fetch('https://www.googleapis.com/drive/v3/files',{method:'POST',headers:{Authorization:'Bearer '+S.driveToken,'Content-Type':'application/json'},body:JSON.stringify({name:'fitness_data.json',parents:['appDataFolder']})});
