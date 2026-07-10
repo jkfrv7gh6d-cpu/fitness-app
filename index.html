@@ -191,6 +191,8 @@ input[type=date]::-webkit-calendar-picker-indicator{filter:invert(1);opacity:.6;
 .week-outer{position:relative;overflow:hidden;border-radius:var(--r);margin-bottom:10px}
 .week-card{background:var(--glass);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);border:1px solid var(--bdr);border-radius:var(--r);box-shadow:var(--sh);margin-bottom:0;transition:transform .3s ease;position:relative;z-index:1}
 .week-outer.swipe-open .week-card{transform:translateX(-100px)}
+.see-more-weeks-btn{width:100%;padding:11px;background:var(--glass);border:1px solid var(--bdr);border-radius:var(--r);font-size:13px;color:var(--t2);cursor:pointer;margin-bottom:10px;text-align:center;font-family:inherit}
+.see-more-weeks-btn:active{opacity:.7}
 .week-del{position:absolute;right:-100px;top:0;bottom:0;width:100px;background:var(--red);border:none;color:#fff;font-size:14px;font-weight:700;cursor:pointer;z-index:0;display:flex;align-items:center;justify-content:center;font-family:inherit;transition:right .3s ease}
 .week-outer.swipe-open .week-del{right:0}
 .week-hdr{display:flex;align-items:center;justify-content:space-between;padding:13px 14px;cursor:pointer;min-height:54px}
@@ -217,7 +219,14 @@ input[type=date]::-webkit-calendar-picker-indicator{filter:invert(1);opacity:.6;
 .month-outer.swipe-open .month-card{transform:translateX(-100px)}
 .month-del{position:absolute;right:-100px;top:0;bottom:0;width:100px;background:var(--red);border:none;color:#fff;font-size:13px;font-weight:700;cursor:pointer;z-index:0;display:flex;align-items:center;justify-content:center;font-family:inherit;text-align:center;padding:8px;transition:right .3s ease}
 .month-outer.swipe-open .month-del{right:0}
-.month-name{font-size:16px;font-weight:700;padding:13px 14px 9px;display:flex;align-items:center;justify-content:space-between}
+.month-name{font-size:16px;font-weight:700;padding:13px 14px 9px;display:flex;align-items:center;justify-content:space-between;cursor:pointer}
+.month-body{display:none}
+.month-card.open .month-body{display:block}
+.month-chev{font-size:11px;color:var(--t2);flex-shrink:0}
+.month-thumbs{display:flex;gap:3px}
+.month-thumb{width:22px;height:22px;border-radius:4px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);overflow:hidden;flex-shrink:0}
+.month-thumb img{width:100%;height:100%;object-fit:cover}
+.month-count{font-size:11px;color:var(--t2);min-width:28px;text-align:right}
 .photos-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:7px;padding:0 13px}
 .photo-slot{aspect-ratio:1;background:rgba(255,255,255,.05);border:2px dashed rgba(255,255,255,.14);border-radius:14px;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;overflow:hidden;position:relative}
 .photo-slot img{width:100%;height:100%;object-fit:cover;position:absolute;inset:0}
@@ -1518,16 +1527,24 @@ async function saveRecette(){
 const MOIS=['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
 
 function renderHistory(){
-  let html=`<div class="card chart-card"><div class="chart-title">📈 Évolution du poids</div><canvas id="weight-chart" height="160"></canvas></div>
+  let html=`<div class="card chart-card"><div class="chart-title">📈 Poids · 3 derniers mois</div><canvas id="weight-chart" height="160"></canvas></div>
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:9px">
     <div style="font-size:16px;font-weight:700">Semaines</div>
     <button class="btn btn-sm" onclick="addWeek()">＋ Semaine</button>
   </div>`;
 
-  S.history.slice().reverse().forEach((w,i)=>{
-    const ri=S.history.length-1-i;
+  const _sortedIdx=S.history.map((_,i)=>i).sort((a,b)=>{
+    const da=S.history[a].dateRaw||S.history[a].date||'';
+    const db=S.history[b].dateRaw||S.history[b].date||'';
+    if(!da&&!db)return 0;if(!da)return 1;if(!db)return -1;
+    return db.localeCompare(da);
+  });
+  const WEEK_LIMIT=4;
+  _sortedIdx.forEach((ri,displayIdx)=>{
+    const w=S.history[ri];
     const wDisplay=w.date?fmtDate(w.date):'— date —';
-    html+=`<div class="week-outer" id="wo-${ri}">
+    const hidden=displayIdx>=WEEK_LIMIT;
+    html+=`<div class="week-outer${hidden?' week-hidden':''}" id="wo-${ri}"${hidden?' style="display:none"':''}>
       <div class="card week-card" id="wk-${ri}">
         <div class="week-hdr" onclick="togWk(${ri})">
           <div class="week-hdr-info">
@@ -1540,6 +1557,8 @@ function renderHistory(){
       <button class="week-del" onclick="confirmDelWeek(${ri})">🗑️<br>Supprimer</button>
     </div>`;
   });
+  const _hiddenCount=_sortedIdx.length-WEEK_LIMIT;
+  if(_hiddenCount>0){html+=`<button class="see-more-weeks-btn" onclick="showAllWeeks()">${_hiddenCount} semaine${_hiddenCount>1?'s':''} précédente${_hiddenCount>1?'s':''} ▼</button>`;}
 
   html+=`<div style="font-size:16px;font-weight:700;margin:18px 0 9px">📸 Photos mensuelles</div>`;
   S.photoMonths.forEach(k=>{
@@ -1557,15 +1576,28 @@ function renderHistory(){
 
 function monthHtml(k,mName){
   return`<div class="month-outer" id="mo-${k}">
-    <div class="month-card">
-      <div class="month-name">${mName}</div>
-      <div class="photos-grid">
-        ${['Face','Côté G','Côté D','Dos'].map((l,pi)=>`
-          <div class="photo-slot" id="ps-${k}-${pi}" onclick="pickPhoto('${k}',${pi})">
-            <span class="ps-ico">📷</span><span class="ps-lbl">${l}</span>
-          </div>`).join('')}
+    <div class="month-card" id="mc-${k}">
+      <div class="month-name" onclick="togMonth('${k}')">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span class="month-chev">▶</span>
+          <span>${mName}</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div class="month-thumbs" id="mt-${k}">
+            ${[0,1,2,3].map(pi=>`<div class="month-thumb" id="mth-${k}-${pi}"></div>`).join('')}
+          </div>
+          <span class="month-count" id="mpc-${k}">0/4</span>
+        </div>
       </div>
-      <textarea class="month-notes" placeholder="Notes du mois…" id="mn-${k}" oninput="saveNote('${k}',this.value)"></textarea>
+      <div class="month-body" id="mb-${k}">
+        <div class="photos-grid">
+          ${['Face','Côté G','Côté D','Dos'].map((l,pi)=>`
+            <div class="photo-slot" id="ps-${k}-${pi}" onclick="photoSlotClick('${k}',${pi})">
+              <span class="ps-ico">📷</span><span class="ps-lbl">${l}</span>
+            </div>`).join('')}
+        </div>
+        <textarea class="month-notes" placeholder="Notes du mois…" id="mn-${k}" oninput="saveNote('${k}',this.value)"></textarea>
+      </div>
     </div>
     <button class="month-del" onclick="confirmDelMonth('${k}')">🗑️<br>Supprimer</button>
   </div>`;
@@ -1591,6 +1623,16 @@ function wkFields(i,w){
 }
 
 function togWk(i){document.getElementById('wk-'+i)?.classList.toggle('open')}
+function showAllWeeks(){
+  document.querySelectorAll('.week-hidden').forEach(el=>{el.style.display='';el.classList.remove('week-hidden');});
+  const btn=document.querySelector('.see-more-weeks-btn');if(btn)btn.remove();
+}
+function togMonth(k){
+  const card=document.getElementById('mc-'+k);if(!card)return;
+  card.classList.toggle('open');
+  const chev=card.querySelector('.month-chev');
+  if(chev)chev.textContent=card.classList.contains('open')?'▼':'▶';
+}
 function addWeek(){S.history.push({date:'',dateRaw:'',weight:'',waist:'',objective:S.settings.objective||'Prise de masse'});saveLocal();renderHistory()}
 // Gluc = (kcal réelles de la carte - Prot×4 - Lip×9) / 4. Jamais 0/vide → 0. Jamais négatif → 0.
 function calculateGlucides(kcalReelles,protG,lipG){
@@ -1675,6 +1717,32 @@ function getPhotoRefs(){return JSON.parse(localStorage.getItem('fv_photo_refs')|
 function setPhotoRef(slotKey,driveFileId){const refs=getPhotoRefs();refs[slotKey]=driveFileId;localStorage.setItem('fv_photo_refs',JSON.stringify(refs))}
 function deletePhotoRef(slotKey){const refs=getPhotoRefs();delete refs[slotKey];localStorage.setItem('fv_photo_refs',JSON.stringify(refs))}
 
+function photoSlotClick(k,pi){
+  const sl=document.getElementById(`ps-${k}-${pi}`);
+  if(sl&&sl.querySelector('img')){openPhotoPreview(sl.querySelector('img').src);}
+  else{pickPhoto(k,pi);}
+}
+function openPhotoPreview(src){
+  const ov=document.createElement('div');
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:9999;display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;';
+  ov.onclick=()=>ov.remove();
+  const img=document.createElement('img');
+  img.src=src;img.style.cssText='max-width:95vw;max-height:90vh;border-radius:12px;object-fit:contain;';
+  ov.appendChild(img);document.body.appendChild(ov);
+}
+function refreshMonthHeader(k){
+  let count=0;
+  for(let pi=0;pi<4;pi++){
+    const sl=document.getElementById(`ps-${k}-${pi}`);
+    const th=document.getElementById(`mth-${k}-${pi}`);
+    if(!sl||!th)continue;
+    const img=sl.querySelector('img');
+    if(img){count++;th.innerHTML=`<img src="${img.src}" alt="">`;}
+    else{th.innerHTML='';}
+  }
+  const cEl=document.getElementById('mpc-'+k);
+  if(cEl)cEl.textContent=count+'/4';
+}
 async function pickPhoto(k,pi){
   const inp=document.createElement('input');inp.type='file';inp.accept='image/*,image/heic,image/heif';
   inp.onchange=async()=>{
@@ -1697,17 +1765,20 @@ async function pickPhoto(k,pi){
         saveLocal();
         const url=URL.createObjectURL(compressed);
         if(sl)sl.innerHTML=`<img src="${url}" alt=""><button class="photo-trash" onclick="event.stopPropagation();removePhoto('${k}',${pi})">🗑️</button>`;
+        refreshMonthHeader(k);
       }catch(e){
         console.warn('Upload photo Drive:',e);
         addToPendingUploads(localId,'historique',k,pi);
         saveLocal();
         if(sl)sl.innerHTML=`<img src="${localDataUrl}" alt=""><button class="photo-trash" onclick="event.stopPropagation();removePhoto('${k}',${pi})">🗑️</button>${pendingBadgeHtml(localId)}`;
+        refreshMonthHeader(k);
       }
     }else{
       // Pas connecté / token expiré : mise en file d'attente, upload dès que possible
       addToPendingUploads(localId,'historique',k,pi);
       saveLocal();
       if(sl)sl.innerHTML=`<img src="${localDataUrl}" alt=""><button class="photo-trash" onclick="event.stopPropagation();removePhoto('${k}',${pi})">🗑️</button>${pendingBadgeHtml(localId)}`;
+      refreshMonthHeader(k);
     }
   };inp.click();
 }
@@ -1726,6 +1797,7 @@ async function removePhoto(k,pi){
     saveLocal();
     const sl=document.getElementById(`ps-${k}-${pi}`);
     if(sl)sl.innerHTML=`<span class="ps-ico">📷</span><span class="ps-lbl">${['Face','Côté G','Côté D','Dos'][pi]}</span>`;
+    refreshMonthHeader(k);
   });
 }
 async function loadPhotos(){
@@ -1744,13 +1816,16 @@ async function loadPhotos(){
     const d=await dbGet(localId);
     if(d)sl.innerHTML=`<img src="${d}" alt=""><button class="photo-trash" onclick="event.stopPropagation();removePhoto('${m[1]}',${m[2]})">🗑️</button>${pendingBadgeHtml(localId)}`;
   }
+  // Mettre à jour les vignettes et compteurs de chaque mois
+  S.photoMonths.forEach(k=>refreshMonthHeader(k));
 }
 function saveNote(k,v){const n=JSON.parse(localStorage.getItem('fv_notes')||'{}');n[k]=v;localStorage.setItem('fv_notes',JSON.stringify(n))}
 function loadNotes(){const notes=JSON.parse(localStorage.getItem('fv_notes')||'{}');Object.entries(notes).forEach(([k,v])=>{const el=document.getElementById('mn-'+k);if(el)el.value=v})}
 
 function drawChart(){
   const canvas=document.getElementById('weight-chart');if(!canvas)return;
-  const entries=S.history.filter(w=>w.weight&&(w.dateRaw||w.date)).sort((a,b)=>(a.dateRaw||a.date).localeCompare(b.dateRaw||b.date));
+  const _now=new Date();const _cutoff=new Date(_now.getFullYear(),_now.getMonth()-3,_now.getDate());
+  const entries=S.history.filter(w=>w.weight&&(w.dateRaw||w.date)&&new Date(w.dateRaw||w.date)>=_cutoff).sort((a,b)=>(a.dateRaw||a.date).localeCompare(b.dateRaw||b.date));
   const ctx=canvas.getContext('2d');const W=canvas.offsetWidth||320,H=160;
   canvas.width=W*devicePixelRatio;canvas.height=H*devicePixelRatio;
   ctx.scale(devicePixelRatio,devicePixelRatio);ctx.clearRect(0,0,W,H);
