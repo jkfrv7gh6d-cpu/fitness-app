@@ -140,6 +140,10 @@ input[type=date]::-webkit-calendar-picker-indicator{filter:invert(1);opacity:.6;
 .food-inner{display:flex;align-items:center;padding:11px 14px;min-height:58px;background:#14141f;position:relative;z-index:1;transition:transform .3s ease}
 .food-outer.swipe-open .food-inner{transform:translateX(-88px)}
 .fr-main{flex:1;min-width:0}
+.food-search-wrap{padding:0 0 10px}
+.food-search-inp{width:100%;background:var(--glass);border:1px solid var(--bdr);border-radius:var(--r);padding:11px 14px;color:var(--text);font-size:15px;font-family:inherit;-webkit-appearance:none;box-sizing:border-box}
+.food-search-inp:focus{outline:none;border-color:var(--blue)}
+.food-search-inp::placeholder{color:var(--t2)}
 .fr-name{font-size:15px;font-weight:600;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .fr-kcal{font-size:13px;color:var(--orange);font-weight:600}
 .fr-macs{font-size:12px;color:var(--t2)}
@@ -1130,8 +1134,22 @@ function getOpenMeals(){return[...document.querySelectorAll('.meal-card.open')].
 function restoreOpenMeals(ids){ids.forEach(id=>document.getElementById('meal-'+id)?.classList.add('open'))}
 
 // ─── FOODS ───────────────────────────────────────────────────────────────────
+function filterFoods(q){
+  const query=(q||'').toLowerCase().trim();
+  document.querySelectorAll('.food-outer').forEach(outer=>{
+    const name=(outer.querySelector('.fr-name')?.textContent||'').toLowerCase();
+    outer.style.display=(!query||name.includes(query))?'':'none';
+  });
+  document.querySelectorAll('.foods-sec').forEach(sec=>{
+    const hasVisible=[...sec.querySelectorAll('.food-outer')].some(o=>o.style.display!=='none');
+    sec.style.display=hasVisible?'':'none';
+  });
+}
 function renderFoods(){
-  let html='';
+  const _q=(document.getElementById('food-search')?.value||'').toLowerCase().trim();
+  let html=`<div class="food-search-wrap">
+    <input id="food-search" class="food-search-inp" type="search" placeholder="Rechercher un aliment…" value="${_q.replace(/"/g,'&quot;')}" oninput="filterFoods(this.value)" autocomplete="off" autocorrect="off" spellcheck="false">
+  </div>`;
   CATS.forEach(cat=>{
     const foods=S.foods.filter(f=>f.cat===cat);if(!foods.length)return;
     html+=`<div class="foods-sec"><div class="sec-hdr" style="color:${CAT_CLR[cat]}">${cat}</div><div class="card" style="overflow:hidden">`;
@@ -1173,6 +1191,7 @@ function renderFoods(){
   document.getElementById('tab-foods').addEventListener('touchstart',e=>{
     if(!e.target.closest('.food-outer'))document.querySelectorAll('.food-outer.swipe-open').forEach(r=>r.classList.remove('swipe-open'));
   },{passive:true});
+  if(_q)filterFoods(_q);
 }
 
 let _aC='Protéine';
@@ -1561,7 +1580,7 @@ function renderHistory(){
   if(_hiddenCount>0){html+=`<button class="see-more-weeks-btn" onclick="showAllWeeks()">${_hiddenCount} semaine${_hiddenCount>1?'s':''} précédente${_hiddenCount>1?'s':''} ▼</button>`;}
 
   html+=`<div style="font-size:16px;font-weight:700;margin:18px 0 9px">📸 Photos mensuelles</div>`;
-  S.photoMonths.forEach(k=>{
+  S.photoMonths.slice().sort((a,b)=>b.localeCompare(a)).forEach(k=>{
     html+=monthHtml(k,fmtFullDate(k));
   });
   html+=`<div style="margin-bottom:10px">
