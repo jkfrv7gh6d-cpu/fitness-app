@@ -200,6 +200,17 @@ input[type=date]::-webkit-calendar-picker-indicator{filter:invert(1);opacity:.6;
 .recipe-kcal-display{font-size:13px;color:var(--text);font-weight:600;margin-left:auto}
 .recipe-macros-row{font-size:11px;margin-top:4px;min-height:14px}
 .al-btn-recipe{background:rgba(255,165,0,.12);border-color:rgba(255,165,0,.25) !important;color:#FF9F0A}
+.brouillon-link-wrap{text-align:center;margin:4px 0 8px}
+.brouillon-link{background:none;border:1px solid rgba(255,255,255,.1);border-radius:20px;color:var(--t2);font-size:13px;cursor:pointer;padding:5px 14px}
+.brouillon-link:active{background:rgba(255,255,255,.06)}
+.brouillon-banner{display:flex;align-items:center;gap:10px;background:rgba(255,165,0,.1);border:1px solid rgba(255,165,0,.2);border-radius:14px;padding:10px 14px;margin-bottom:12px;font-size:14px;font-weight:600;color:#FF9F0A}
+.brouillon-base-badge{font-size:12px;background:rgba(255,255,255,.1);border-radius:8px;padding:2px 8px;color:var(--text)}
+.brouillon-back-btn{margin-left:auto;background:rgba(255,255,255,.1);border:none;border-radius:10px;color:var(--text);font-size:13px;padding:6px 12px;cursor:pointer;white-space:nowrap;flex-shrink:0}
+.brouillon-init-card{padding:18px;text-align:center}
+.brouillon-init-btns{display:flex;gap:12px;justify-content:center;margin-top:10px}
+.brouillon-init-btn{flex:1;padding:14px;border-radius:14px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.06);color:var(--text);font-size:15px;font-weight:600;cursor:pointer}
+.brouillon-footer{padding:14px 0 4px;display:flex;justify-content:center}
+.brouillon-reset-btn{background:rgba(255,69,58,.1);border:1px solid rgba(255,69,58,.25);border-radius:14px;color:var(--red);font-size:14px;padding:11px 22px;cursor:pointer}
 .recette-card-portions{font-size:11px;color:var(--t3);margin-top:2px}
 
 .recette-detail-overlay{position:fixed;inset:0;background:#0f0f1a;z-index:1500;display:none;flex-direction:column}
@@ -635,12 +646,13 @@ const DS={
 // ─── STATE ────────────────────────────────────────────────────────────────────
 let S={
   activeTab:'today',todayDate:tds(),dayType:'ON',
-  mealsOn:null,mealsOff:null,foods:[],history:[],photoMonths:[],recettes:[],
+  mealsOn:null,mealsOff:null,foods:[],history:[],photoMonths:[],recettes:[],brouillon:null,
   settings:null,driveToken:null,driveFileId:null,
   syncTimer:null,renderTimer:null,
 };
 let DB,gsiReady=false;
 let driveFolderIdCache=null;
+let _brouillonOpen=false;
 
 // ─── UTILS ───────────────────────────────────────────────────────────────────
 function tds(){return new Date().toISOString().split('T')[0]}
@@ -744,6 +756,7 @@ function loadLocal(){
   S.settings.targetsOff=S.settings.targetsOff.filter(t=>t.name!=='Glace du soir');
   S.photoMonths=JSON.parse(localStorage.getItem('fv_photoMonths')||'[]');
   S.recettes=JSON.parse(localStorage.getItem('fv_recettes')||'[]');
+  S.brouillon=JSON.parse(localStorage.getItem('fv_brouillon')||'null');
   // Always load last saved state (no date-based reset)
   const saved=JSON.parse(localStorage.getItem('fv_today')||'null');
   if(saved&&saved.mealsOn&&saved.mealsOff){
@@ -1047,6 +1060,7 @@ function updateTodaySiblingInput(mealId,lineId,which){
   }
 }
 function renderToday(){
+  if(_brouillonOpen){renderBrouillon();return;}
   const meals=S.dayType==='ON'?S.mealsOn:S.mealsOff;
 
   let html=`
@@ -1054,6 +1068,7 @@ function renderToday(){
     <button class="dt-btn${S.dayType==='ON'?' on':''}" onclick="setDT('ON')">☀️ JOUR ON</button>
     <button class="dt-btn${S.dayType==='OFF'?' off':''}" onclick="setDT('OFF')">🌙 JOUR OFF</button>
   </div>
+  <div class="brouillon-link-wrap"><button class="brouillon-link" onclick="openBrouillon()">✏️ Brouillon</button></div>
   <div class="card" style="margin-bottom:10px">
     <div class="gauges-row" id="today-gauges">${gaugesBlockHtml()}</div>
   </div>`;
@@ -1291,6 +1306,291 @@ function onRecipePortions(inp){
   const md=document.getElementById(`rpm-${mealId}-${lineId}`);
   if(md)md.innerHTML=mac?`<span class="mmt pc">P ${Math.round(mac.prot)}g</span><span class="mmt-sep"> · </span><span class="mmt gc">G ${Math.round(mac.gluc)}g</span><span class="mmt-sep"> · </span><span class="mmt lc">L ${Math.round(mac.lip)}g</span>`:'';
   refreshTodayCalcs(mealId,lineId);
+}
+// ─── BROUILLON ────────────────────────────────────────────────────────────────
+function getBML(mealId,lineId){
+  if(!S.brouillon)return{meal:null,line:null};
+  const m=S.brouillon.meals.find(x=>x.id===mealId);
+  return{meal:m,line:m?.lines.find(l=>l.id===lineId)};
+}
+function saveBrouillon(){
+  localStorage.setItem('fv_brouillon',JSON.stringify(S.brouillon));
+  schedSync();
+}
+function openBrouillon(){_brouillonOpen=true;renderToday();}
+function closeBrouillon(){_brouillonOpen=false;renderToday();}
+function initBrouillon(base){
+  const template=base==='ON'?S.mealsOn:S.mealsOff;
+  S.brouillon={base,meals:dc(template)};
+  saveBrouillon();
+  renderBrouillon();
+}
+function resetBrouillon(){
+  if(!confirm('Vider le brouillon et repartir de zéro ?'))return;
+  S.brouillon=null;
+  saveBrouillon();
+  renderBrouillon();
+}
+function brouillonTotals(){
+  if(!S.brouillon)return{tK:0,tP:0,tG:0,tL:0};
+  let tK=0,tP=0,tG=0,tL=0;
+  S.brouillon.meals.forEach(m=>m.lines.forEach(l=>{
+    if(l.type==='recipe'){tK+=recipeLineKcal(l);const mac=recipeLineMacros(l);if(mac){tP+=mac.prot;tG+=mac.gluc;tL+=mac.lip;}}
+    else{tK+=(l.kcal||0);if(l.foodId&&l.kcal){const r=cm(l.foodId,l.kcal);tP+=r.prot;tG+=r.gluc;tL+=r.lip;}}
+  }));
+  return{tK,tP,tG,tL};
+}
+function brouillonGaugesHtml(){
+  const{tK,tP,tG,tL}=brouillonTotals();
+  const dm=calcDailyMacros();
+  const base=S.brouillon?.base||'ON';
+  const kcalTgt=base==='ON'?dm.kcalON:dm.kcalOFF;
+  const gTgt=base==='ON'?dm.G_ON:dm.G_OFF;
+  return`${gaugeHtml('bg-kcal','🔥',tK,kcalTgt,' kcal','Calories')}
+    ${gaugeHtml('bg-prot','💪',tP,dm.P,'g','Protéines')}
+    ${gaugeHtml('bg-gluc','🌾',tG,gTgt,'g','Glucides')}
+    ${gaugeHtml('bg-lip','🥑',tL,dm.L,'g','Lipides')}`;
+}
+function brouillonMealHeaderHtml(meal){
+  const mK=meal.lines.reduce((s,l)=>s+(l.type==='recipe'?recipeLineKcal(l):(l.kcal||0)),0);
+  return`<span class="meal-cur">${n0(mK)}</span><span class="meal-tgt"> kcal</span>`;
+}
+function brouillonDualInputHtml(mealId,line){
+  const food=gf(line.foodId);
+  const kcalPer100=food?food.kcal:0;
+  const canGrams=!!(food&&kcalPer100>0);
+  const gramsVal=canGrams&&line.kcal?nf((line.kcal/kcalPer100)*100,1):'';
+  return`<div class="dual-input-row">
+    <div class="input-field-wrap">
+      <input class="grams-input" type="text" inputmode="decimal" pattern="[0-9.,]*" value="${gramsVal}" placeholder="${canGrams?'0':'—'}"
+        data-meal="${mealId}" data-line="${line.id}" oninput="onBGramsChange(this)"${canGrams?'':' disabled'}>
+      <span class="input-unit">g</span>
+    </div>
+    <span class="input-sep">=</span>
+    <div class="input-field-wrap">
+      <input class="kcal-input" type="text" inputmode="decimal" pattern="[0-9.,]*" value="${line.kcal||''}" placeholder="0"
+        data-meal="${mealId}" data-line="${line.id}" oninput="onBKC(this)">
+      <span class="input-unit">kcal</span>
+    </div>
+  </div>`;
+}
+function updateBrouillonSiblingInput(mealId,lineId,which){
+  const{line}=getBML(mealId,lineId);if(!line)return;
+  const food=gf(line.foodId);const canGrams=!!(food&&food.kcal>0);
+  if(which==='grams'){
+    const el=document.querySelector(`.grams-input[data-meal="${mealId}"][data-line="${lineId}"]`);
+    if(!el)return;el.disabled=!canGrams;
+    el.value=canGrams&&line.kcal?nf((line.kcal/food.kcal)*100,1):'';
+  }else{
+    const el=document.querySelector(`.kcal-input[data-meal="${mealId}"][data-line="${lineId}"]`);
+    if(el)el.value=line.kcal||'';
+  }
+}
+function refreshBrouillonCalcs(mealId,lineId){
+  const{meal,line}=getBML(mealId,lineId);if(!meal)return;
+  if(line&&line.type!=='recipe'){
+    const mac=line.foodId&&line.kcal?cm(line.foodId,line.kcal):null;
+    const box=document.getElementById(`mac-${mealId}-${lineId}`);
+    if(box){box.style.display=mac?'grid':'none';box.innerHTML=foodLineMacrosHtml(mac);}
+  }
+  const head=document.getElementById(`mhead-${mealId}`);if(head)head.innerHTML=brouillonMealHeaderHtml(meal);
+  const mmac=document.getElementById(`mmac-${mealId}`);if(mmac)mmac.innerHTML=mealMacrosHtml(meal);
+  const gauges=document.getElementById('brouillon-gauges');if(gauges)gauges.innerHTML=brouillonGaugesHtml();
+}
+function onBKC(inp){
+  const{line}=getBML(inp.dataset.meal,inp.dataset.line);if(!line)return;
+  line.kcal=parseDecimal(inp.value);
+  saveBrouillon();
+  updateBrouillonSiblingInput(inp.dataset.meal,inp.dataset.line,'grams');
+  refreshBrouillonCalcs(inp.dataset.meal,inp.dataset.line);
+}
+function onBGramsChange(inp){
+  const{line}=getBML(inp.dataset.meal,inp.dataset.line);if(!line)return;
+  const food=gf(line.foodId);if(!food||!food.kcal)return;
+  const grams=parseDecimal(inp.value);
+  line.kcal=grams?Math.round(grams/100*food.kcal):0;
+  saveBrouillon();
+  updateBrouillonSiblingInput(inp.dataset.meal,inp.dataset.line,'kcal');
+  refreshBrouillonCalcs(inp.dataset.meal,inp.dataset.line);
+}
+function openBrouillonFoodPicker(mealId,lineId,cat,currentFoodId){
+  document.getElementById('food-picker-ov')?.remove();
+  const foods=S.foods.filter(f=>f.cat===cat);
+  const ov=document.createElement('div');
+  ov.id='food-picker-ov';ov.className='fp-overlay';
+  ov.innerHTML=`<div class="fp-sheet">
+    <div class="fp-sheet-hdr">
+      <span class="fp-sheet-title">${cat}</span>
+      <button class="fp-close-btn" onclick="document.getElementById('food-picker-ov').remove()">✕</button>
+    </div>
+    <div class="fp-search-wrap">
+      <input id="fp-search" type="search" class="fp-search-inp" placeholder="Rechercher…" autocomplete="off" autocorrect="off" spellcheck="false" oninput="filterFoodPicker(this.value)">
+    </div>
+    <div id="fp-list" class="fp-list">
+      <div class="fp-item fp-none-item${!currentFoodId?' fp-active':''}" onclick="selectBrouillonFood('${mealId}','${lineId}','')">
+        <span class="fp-name">— Aucun —</span>
+      </div>
+      ${foods.map(f=>`<div class="fp-item${f.id===currentFoodId?' fp-active':''}" onclick="selectBrouillonFood('${mealId}','${lineId}','${f.id}')" data-name="${f.name.toLowerCase()}">
+        <span class="fp-name">${f.name}</span>
+        <span class="fp-kcal">${n0(f.kcal)} kcal/100g</span>
+      </div>`).join('')}
+    </div>
+  </div>`;
+  ov.addEventListener('click',e=>{if(e.target===ov)ov.remove();});
+  document.body.appendChild(ov);
+  setTimeout(()=>document.getElementById('fp-search')?.focus(),150);
+}
+function selectBrouillonFood(mealId,lineId,foodId){
+  document.getElementById('food-picker-ov')?.remove();
+  const{line}=getBML(mealId,lineId);if(!line)return;
+  line.foodId=foodId||null;
+  saveBrouillon();
+  updateBrouillonSiblingInput(mealId,lineId,'grams');
+  refreshBrouillonCalcs(mealId,lineId);
+  const lbl=document.getElementById(`fl-lbl-${mealId}-${lineId}`);
+  if(lbl){const food=gf(foodId);lbl.textContent=food?food.name:'— Choisir —';}
+}
+function addBrouillonLine(mealId,cat){
+  if(!S.brouillon)return;
+  const meal=S.brouillon.meals.find(m=>m.id===mealId);if(!meal)return;
+  meal.lines.push({id:'bl_'+Date.now(),cat,foodId:null,kcal:0});
+  saveBrouillon();renderBrouillon();
+}
+function removeBrouillonLine(mealId,lineId){
+  if(!S.brouillon)return;
+  const meal=S.brouillon.meals.find(m=>m.id===mealId);if(!meal)return;
+  meal.lines=meal.lines.filter(l=>l.id!==lineId);
+  saveBrouillon();renderBrouillon();
+}
+function openBrouillonRecipePicker(mealId){
+  document.getElementById('recipe-picker-ov')?.remove();
+  if(!S.recettes.length){alert('Aucune recette enregistrée. Créez d\'abord une recette dans l\'onglet Recettes.');return;}
+  const ov=document.createElement('div');
+  ov.id='recipe-picker-ov';ov.className='fp-overlay';
+  ov.innerHTML=`<div class="fp-sheet">
+    <div class="fp-sheet-hdr">
+      <span class="fp-sheet-title">Ajouter une recette</span>
+      <button class="fp-close-btn" onclick="document.getElementById('recipe-picker-ov').remove()">✕</button>
+    </div>
+    <div class="fp-search-wrap">
+      <input id="rp-search" type="search" class="fp-search-inp" placeholder="Rechercher une recette…" autocomplete="off" oninput="filterRecipePicker(this.value)">
+    </div>
+    <div id="rp-list" class="fp-list">
+      ${S.recettes.map(r=>`<div class="fp-item" onclick="addBrouillonRecipeLine('${mealId}','${r.id}')" data-name="${r.name.toLowerCase()}">
+        <div style="flex:1;min-width:0">
+          <div class="fp-name">${r.name}</div>
+          <div class="fp-kcal">${n0(r.totalKcal)} kcal${(r.portions||1)>1?' · '+(r.portions)+' portions':''} · P${n0(r.totalProt)}g G${n0(r.totalGluc)}g L${n0(r.totalLip)}g</div>
+        </div>
+      </div>`).join('')}
+    </div>
+  </div>`;
+  ov.addEventListener('click',e=>{if(e.target===ov)ov.remove();});
+  document.body.appendChild(ov);
+  setTimeout(()=>document.getElementById('rp-search')?.focus(),150);
+}
+function addBrouillonRecipeLine(mealId,recipeId){
+  document.getElementById('recipe-picker-ov')?.remove();
+  if(!S.brouillon)return;
+  const meal=S.brouillon.meals.find(m=>m.id===mealId);if(!meal)return;
+  meal.lines.push({id:'brl_'+Date.now(),type:'recipe',recipeId,portions:1,isTemp:true});
+  saveBrouillon();renderBrouillon();
+}
+function removeBrouillonRecipeLine(mealId,lineId){
+  if(!S.brouillon)return;
+  const meal=S.brouillon.meals.find(m=>m.id===mealId);if(!meal)return;
+  meal.lines=meal.lines.filter(l=>l.id!==lineId);
+  saveBrouillon();renderBrouillon();
+}
+function onBrouillonRecipePortions(inp){
+  const mealId=inp.dataset.meal,lineId=inp.dataset.line;
+  const{line}=getBML(mealId,lineId);if(!line||line.type!=='recipe')return;
+  line.portions=parseDecimal(inp.value)||1;
+  saveBrouillon();
+  const kcal=recipeLineKcal(line);const mac=recipeLineMacros(line);
+  const kd=document.getElementById(`rpk-${mealId}-${lineId}`);
+  if(kd)kd.textContent=`→ ${n0(kcal)} kcal`;
+  const md=document.getElementById(`rpm-${mealId}-${lineId}`);
+  if(md)md.innerHTML=mac?`<span class="mmt pc">P ${Math.round(mac.prot)}g</span><span class="mmt-sep"> · </span><span class="mmt gc">G ${Math.round(mac.gluc)}g</span><span class="mmt-sep"> · </span><span class="mmt lc">L ${Math.round(mac.lip)}g</span>`:'';
+  refreshBrouillonCalcs(mealId,lineId);
+}
+function renderBrouillon(){
+  if(!S.brouillon){
+    document.getElementById('tab-today').innerHTML=`
+    <div class="brouillon-banner">✏️ Brouillon <button class="brouillon-back-btn" onclick="closeBrouillon()">← Retour</button></div>
+    <div class="card brouillon-init-card">
+      <div style="font-size:15px;font-weight:600;color:var(--text);margin-bottom:14px;">Choisir une base pour le brouillon :</div>
+      <div class="brouillon-init-btns">
+        <button class="brouillon-init-btn on" onclick="initBrouillon('ON')">☀️ Jour ON</button>
+        <button class="brouillon-init-btn off" onclick="initBrouillon('OFF')">🌙 Jour OFF</button>
+      </div>
+    </div>
+    <div class="scroll-end"></div>`;
+    return;
+  }
+  const meals=S.brouillon.meals;
+  let html=`
+  <div class="brouillon-banner">
+    ✏️ Brouillon · <span class="brouillon-base-badge">${S.brouillon.base==='ON'?'☀️ ON':'🌙 OFF'}</span>
+    <button class="brouillon-back-btn" onclick="closeBrouillon()">← Retour</button>
+  </div>
+  <div class="card" style="margin-bottom:10px">
+    <div class="gauges-row" id="brouillon-gauges">${brouillonGaugesHtml()}</div>
+  </div>`;
+  meals.forEach(meal=>{
+    html+=`<div class="card meal-card" id="meal-${meal.id}">
+      <div class="meal-hdr" onclick="toggleMeal('${meal.id}')">
+        <span class="meal-icon">${meal.icon}</span>
+        <div class="meal-info">
+          <div class="meal-name">${meal.name}</div>
+          <div class="meal-kcal-row" id="mhead-${meal.id}">${brouillonMealHeaderHtml(meal)}</div>
+          <div class="meal-macros-row" id="mmac-${meal.id}">${mealMacrosHtml(meal)}</div>
+        </div><span class="chev">▼</span>
+      </div>
+      <div class="meal-body">`;
+    meal.lines.forEach(line=>{
+      if(line.type==='recipe'){
+        const r=S.recettes.find(x=>x.id===line.recipeId);
+        const kcal=recipeLineKcal(line);const recMac=recipeLineMacros(line);
+        const rName=r?r.name:'Recette supprimée';const rPort=r?(r.portions||1):1;
+        html+=`<div class="food-line recipe-line">
+          <div class="fl-top">
+            <div class="fl-cat recipe-cat">🍳</div>
+            <span class="recipe-line-name">${rName}</span>
+            <button class="fl-rm" onclick="removeBrouillonRecipeLine('${meal.id}','${line.id}')">×</button>
+          </div>
+          <div class="recipe-portions-row">
+            <input class="recipe-portions-inp" type="text" inputmode="decimal" pattern="[0-9.,]*" value="${line.portions||1}" data-meal="${meal.id}" data-line="${line.id}" oninput="onBrouillonRecipePortions(this)">
+            <span class="recipe-portions-label">/ ${rPort} portion${rPort>1?'s':''}</span>
+            <span class="recipe-kcal-display" id="rpk-${meal.id}-${line.id}">→ ${n0(kcal)} kcal</span>
+          </div>
+          <div class="recipe-macros-row" id="rpm-${meal.id}-${line.id}">${recMac?`<span class="mmt pc">P ${Math.round(recMac.prot)}g</span><span class="mmt-sep"> · </span><span class="mmt gc">G ${Math.round(recMac.gluc)}g</span><span class="mmt-sep"> · </span><span class="mmt lc">L ${Math.round(recMac.lip)}g</span>`:''}</div>
+        </div>`;
+        return;
+      }
+      const mac=line.foodId&&line.kcal?cm(line.foodId,line.kcal):null;
+      const food=S.foods.find(f=>f.id===line.foodId);
+      html+=`<div class="food-line">
+        <div class="fl-top">
+          <div class="fl-cat">${line.cat}</div>
+          <button class="fl-sel-btn" onclick="openBrouillonFoodPicker('${meal.id}','${line.id}','${line.cat}','${line.foodId||''}')">
+            <span class="fl-sel-lbl" id="fl-lbl-${meal.id}-${line.id}">${food?food.name:'— Choisir —'}</span>
+          </button>
+          <button class="fl-rm" onclick="removeBrouillonLine('${meal.id}','${line.id}')">×</button>
+        </div>
+        ${brouillonDualInputHtml(meal.id,line)}
+        <div class="fl-macros" id="mac-${meal.id}-${line.id}" style="display:${mac?'grid':'none'}">${foodLineMacrosHtml(mac)}</div>
+      </div>`;
+    });
+    html+=`<div class="add-line-row">
+      ${CATS.map(cat=>`<button class="al-btn" onclick="addBrouillonLine('${meal.id}','${cat}')">＋${cat==='Protéine'?'Prot':cat==='Glucide'?'Gluc':cat==='Légume'?'Légume':cat==='Lipide'?'Lip':cat==='Fruit'?'Fruit':'Dessert'}</button>`).join('')}
+      <button class="al-btn al-btn-recipe" onclick="openBrouillonRecipePicker('${meal.id}')">🍳 Recette</button>
+    </div></div></div>`;
+  });
+  html+=`<div class="brouillon-footer">
+    <button class="brouillon-reset-btn" onclick="resetBrouillon()">🗑️ Vider le brouillon</button>
+  </div><div class="scroll-end"></div>`;
+  document.getElementById('tab-today').innerHTML=html;
+  attachDecimalFix();
 }
 function onKC(inp){
   const{line}=getML(inp.dataset.meal,inp.dataset.line);
@@ -2502,7 +2802,7 @@ async function drivePush(){
   const lipCoef=localStorage.getItem('lipCoef')?parseFloat(localStorage.getItem('lipCoef')):null;
   const planRefOn=localStorage.getItem('fv_plan_reference_ON')?JSON.parse(localStorage.getItem('fv_plan_reference_ON')):null;
   const planRefOff=localStorage.getItem('fv_plan_reference_OFF')?JSON.parse(localStorage.getItem('fv_plan_reference_OFF')):null;
-  const body=JSON.stringify({foods:S.foods,history:S.history,settings:S.settings,mealsOn:S.mealsOn,mealsOff:S.mealsOff,dayType:S.dayType,photoMonths:S.photoMonths,recettes:S.recettes,photoRefs,notes,macroCoefs,lipCoef,planRefOn,planRefOff,lastSaved});
+  const body=JSON.stringify({foods:S.foods,history:S.history,settings:S.settings,mealsOn:S.mealsOn,mealsOff:S.mealsOff,dayType:S.dayType,photoMonths:S.photoMonths,recettes:S.recettes,brouillon:S.brouillon,photoRefs,notes,macroCoefs,lipCoef,planRefOn,planRefOff,lastSaved});
   try{
     let fid=S.driveFileId||await driveFindFile();
     let resp;
@@ -2538,6 +2838,7 @@ async function driveLoad(){
       if(d.mealsOff)S.mealsOff=d.mealsOff;if(d.dayType)S.dayType=d.dayType;
       if(d.photoMonths)S.photoMonths=d.photoMonths;
       if(d.recettes)S.recettes=d.recettes;
+      if(d.brouillon!==undefined){S.brouillon=d.brouillon;localStorage.setItem('fv_brouillon',JSON.stringify(S.brouillon));}
       if(d.photoRefs)localStorage.setItem('fv_photo_refs',JSON.stringify(d.photoRefs));
       if(d.notes)localStorage.setItem('fv_notes',JSON.stringify(d.notes));
       if(d.macroCoefs)localStorage.setItem('macroCoefs',JSON.stringify(d.macroCoefs));
