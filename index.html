@@ -188,6 +188,19 @@ input[type=date]::-webkit-calendar-picker-indicator{filter:invert(1);opacity:.6;
 .recette-card-macros{font-size:12px;color:var(--t2)}
 .recette-card-arrow{color:var(--t3);font-size:20px}
 .recettes-empty{text-align:center;padding:60px 20px;color:var(--t3);font-size:14px;line-height:1.6}
+.recette-portions-form-row{display:flex;align-items:center;justify-content:space-between;padding:10px 0;margin-bottom:10px;border-top:1px solid rgba(255,255,255,.06);border-bottom:1px solid rgba(255,255,255,.06)}
+.recette-portions-form-lbl{font-size:13px;color:var(--t2)}
+.recette-portions-form-inp{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);border-radius:8px;color:var(--text);font-size:15px;padding:7px 12px;width:70px;text-align:center;-webkit-appearance:none}
+.recipe-line{background:rgba(255,165,0,.06);border:1px solid rgba(255,165,0,.18);border-radius:10px;padding:8px 10px;margin-bottom:6px}
+.recipe-cat{font-size:17px;line-height:1;text-align:center}
+.recipe-line-name{flex:1;font-size:14px;font-weight:600;color:var(--text);overflow:hidden;white-space:nowrap;text-overflow:ellipsis;min-width:0}
+.recipe-portions-row{display:flex;align-items:center;gap:6px;margin-top:6px;flex-wrap:wrap}
+.recipe-portions-inp{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:8px;color:var(--text);font-size:14px;padding:6px 8px;width:52px;text-align:center;-webkit-appearance:none}
+.recipe-portions-label{font-size:13px;color:var(--t2)}
+.recipe-kcal-display{font-size:13px;color:var(--text);font-weight:600;margin-left:auto}
+.recipe-macros-row{font-size:11px;margin-top:4px;min-height:14px}
+.al-btn-recipe{background:rgba(255,165,0,.12);border-color:rgba(255,165,0,.25) !important;color:#FF9F0A}
+.recette-card-portions{font-size:11px;color:var(--t3);margin-top:2px}
 
 .recette-detail-overlay{position:fixed;inset:0;background:#0f0f1a;z-index:1500;display:none;flex-direction:column}
 .recette-detail-overlay.open{display:flex}
@@ -449,6 +462,10 @@ table.tgt td:first-child{text-align:left;font-size:12px;color:var(--t2);padding-
       <div>💪 <span id="recette-total-prot">0</span>g Prot</div>
       <div>🌾 <span id="recette-total-gluc">0</span>g Gluc</div>
       <div>🥑 <span id="recette-total-lip">0</span>g Lip</div>
+    </div>
+    <div class="recette-portions-form-row">
+      <span class="recette-portions-form-lbl">🍽️ Nombre de portions</span>
+      <input id="recette-portions" type="text" inputmode="decimal" pattern="[0-9.,]*" value="1" placeholder="1" class="recette-portions-form-inp">
     </div>
     <div class="recette-ingredients-card">
       <div class="recette-ing-title">Ingrédients</div>
@@ -778,7 +795,9 @@ function enregistrerPlan(){
   if(!currentData||!currentData.length){alert('Aucune donnée à enregistrer.');return;}
   const confirmed=confirm('Enregistrer le plan actuel comme plan Jour '+toggle+' de référence ?\nIl remplacera votre ancien plan habituel.');
   if(!confirmed)return;
-  localStorage.setItem(`fv_plan_reference_${toggle}`,JSON.stringify(currentData));
+  // Exclure les lignes recette (isTemp) du plan de référence
+  const cleanData=currentData.map(m=>({...m,lines:m.lines.filter(l=>l.type!=='recipe')}));
+  localStorage.setItem(`fv_plan_reference_${toggle}`,JSON.stringify(cleanData));
   const btn=document.getElementById('btn-enregistrer-plan');
   if(btn){
     const originalText=btn.textContent;
@@ -904,12 +923,30 @@ function renderTab(n){
 }
 
 // ─── TODAY ───────────────────────────────────────────────────────────────────
+function recipeLineKcal(line){
+  const r=S.recettes.find(x=>x.id===line.recipeId);
+  if(!r)return 0;
+  const mult=(line.portions||1)/(r.portions||1);
+  return Math.round(r.totalKcal*mult);
+}
+function recipeLineMacros(line){
+  const r=S.recettes.find(x=>x.id===line.recipeId);
+  if(!r)return null;
+  const mult=(line.portions||1)/(r.portions||1);
+  return{prot:r.totalProt*mult,gluc:r.totalGluc*mult,lip:r.totalLip*mult};
+}
 function todayTotals(){
   const meals=S.dayType==='ON'?S.mealsOn:S.mealsOff;
   let tK=0,tP=0,tG=0,tL=0;
   meals.forEach(m=>m.lines.forEach(l=>{
-    tK+=(l.kcal||0);
-    if(l.foodId&&l.kcal){const r=cm(l.foodId,l.kcal);tP+=r.prot;tG+=r.gluc;tL+=r.lip;}
+    if(l.type==='recipe'){
+      tK+=recipeLineKcal(l);
+      const mac=recipeLineMacros(l);
+      if(mac){tP+=mac.prot;tG+=mac.gluc;tL+=mac.lip;}
+    }else{
+      tK+=(l.kcal||0);
+      if(l.foodId&&l.kcal){const r=cm(l.foodId,l.kcal);tP+=r.prot;tG+=r.gluc;tL+=r.lip;}
+    }
   }));
   return{tK,tP,tG,tL};
 }
@@ -934,13 +971,18 @@ function getMealTargetKcal(meal){
 function mealMacrosHtml(meal){
   let P=0,G=0,L=0;
   meal.lines.forEach(l=>{
-    if(l.foodId&&l.kcal){const m=cm(l.foodId,l.kcal);if(m){P+=m.prot;G+=m.gluc;L+=m.lip;}}
+    if(l.type==='recipe'){
+      const mac=recipeLineMacros(l);
+      if(mac){P+=mac.prot;G+=mac.gluc;L+=mac.lip;}
+    }else{
+      if(l.foodId&&l.kcal){const m=cm(l.foodId,l.kcal);if(m){P+=m.prot;G+=m.gluc;L+=m.lip;}}
+    }
   });
   if(P===0&&G===0&&L===0)return'';
   return`<span class="mmt pc">P ${Math.round(P)}g</span><span class="mmt-sep"> · </span><span class="mmt gc">G ${Math.round(G)}g</span><span class="mmt-sep"> · </span><span class="mmt lc">L ${Math.round(L)}g</span>`;
 }
 function mealHeaderHtml(meal){
-  const mK=meal.lines.reduce((s,l)=>s+(l.kcal||0),0);
+  const mK=meal.lines.reduce((s,l)=>s+(l.type==='recipe'?recipeLineKcal(l):(l.kcal||0)),0);
   const tgKcal=getMealTargetKcal(meal);
   const hasTarget=tgKcal!=null&&tgKcal>0;
   const diff=hasTarget?mK-tgKcal:0;
@@ -950,7 +992,7 @@ function mealHeaderHtml(meal){
     ${hasTarget?`<span class="meal-tgt">/ ${n0(tgKcal)} kcal</span>${tolHtml}`:`<span class="meal-tgt">kcal · optionnel</span>`}`;
 }
 function mealProgHtml(meal){
-  const mK=meal.lines.reduce((s,l)=>s+(l.kcal||0),0);
+  const mK=meal.lines.reduce((s,l)=>s+(l.type==='recipe'?recipeLineKcal(l):(l.kcal||0)),0);
   const tgKcal=getMealTargetKcal(meal);
   const hasTarget=tgKcal!=null&&tgKcal>0;
   if(!hasTarget)return'';
@@ -1030,6 +1072,27 @@ function renderToday(){
       <div class="meal-body">`;
 
     meal.lines.forEach(line=>{
+      if(line.type==='recipe'){
+        const r=S.recettes.find(x=>x.id===line.recipeId);
+        const kcal=recipeLineKcal(line);
+        const recMac=recipeLineMacros(line);
+        const rName=r?r.name:'Recette supprimée';
+        const rPort=r?(r.portions||1):1;
+        html+=`<div class="food-line recipe-line">
+          <div class="fl-top">
+            <div class="fl-cat recipe-cat">🍳</div>
+            <span class="recipe-line-name">${rName}</span>
+            <button class="fl-rm" onclick="removeRecipeLine('${meal.id}','${line.id}')">×</button>
+          </div>
+          <div class="recipe-portions-row">
+            <input class="recipe-portions-inp" type="text" inputmode="decimal" pattern="[0-9.,]*" value="${line.portions||1}" data-meal="${meal.id}" data-line="${line.id}" oninput="onRecipePortions(this)">
+            <span class="recipe-portions-label">/ ${rPort} portion${rPort>1?'s':''}</span>
+            <span class="recipe-kcal-display" id="rpk-${meal.id}-${line.id}">→ ${n0(kcal)} kcal</span>
+          </div>
+          <div class="recipe-macros-row" id="rpm-${meal.id}-${line.id}">${recMac?`<span class="mmt pc">P ${Math.round(recMac.prot)}g</span><span class="mmt-sep"> · </span><span class="mmt gc">G ${Math.round(recMac.gluc)}g</span><span class="mmt-sep"> · </span><span class="mmt lc">L ${Math.round(recMac.lip)}g</span>`:''}</div>
+        </div>`;
+        return;
+      }
       const mac=line.foodId&&line.kcal?cm(line.foodId,line.kcal):null;
       html+=`<div class="food-line">
         <div class="fl-top">
@@ -1046,6 +1109,7 @@ function renderToday(){
 
     html+=`<div class="add-line-row">
       ${CATS.map(cat=>`<button class="al-btn" onclick="addLine('${meal.id}','${cat}')">＋${cat==='Protéine'?'Prot':cat==='Glucide'?'Gluc':cat==='Légume'?'Légume':cat==='Lipide'?'Lip':cat==='Fruit'?'Fruit':'Dessert'}</button>`).join('')}
+      <button class="al-btn al-btn-recipe" onclick="openRecipePicker('${meal.id}')">🍳 Recette</button>
     </div></div></div>`;
   });
   html+=`<div class="plan-reference-bar">
@@ -1163,6 +1227,70 @@ function selectFoodFromPicker(mealId,lineId,foodId){
   refreshTodayCalcs(mealId,lineId);
   const lbl=document.getElementById(`fl-lbl-${mealId}-${lineId}`);
   if(lbl){const food=gf(foodId);lbl.textContent=food?food.name:'— Choisir —';}
+}
+function openRecipePicker(mealId){
+  document.getElementById('recipe-picker-ov')?.remove();
+  if(!S.recettes.length){alert('Aucune recette enregistrée. Créez d\'abord une recette dans l\'onglet Recettes.');return;}
+  const ov=document.createElement('div');
+  ov.id='recipe-picker-ov';
+  ov.className='fp-overlay';
+  ov.innerHTML=`<div class="fp-sheet">
+    <div class="fp-sheet-hdr">
+      <span class="fp-sheet-title">Ajouter une recette</span>
+      <button class="fp-close-btn" onclick="document.getElementById('recipe-picker-ov').remove()">✕</button>
+    </div>
+    <div class="fp-search-wrap">
+      <input id="rp-search" type="search" class="fp-search-inp" placeholder="Rechercher une recette…" autocomplete="off" autocorrect="off" spellcheck="false" oninput="filterRecipePicker(this.value)">
+    </div>
+    <div id="rp-list" class="fp-list">
+      ${S.recettes.map(r=>`<div class="fp-item" onclick="addRecipeLineToMeal('${mealId}','${r.id}')" data-name="${r.name.toLowerCase()}">
+        <div style="flex:1;min-width:0">
+          <div class="fp-name">${r.name}</div>
+          <div class="fp-kcal">${n0(r.totalKcal)} kcal${(r.portions||1)>1?' · '+(r.portions)+' portions':''} · P${n0(r.totalProt)}g G${n0(r.totalGluc)}g L${n0(r.totalLip)}g</div>
+        </div>
+      </div>`).join('')}
+    </div>
+  </div>`;
+  ov.addEventListener('click',e=>{if(e.target===ov)ov.remove();});
+  document.body.appendChild(ov);
+  setTimeout(()=>document.getElementById('rp-search')?.focus(),150);
+}
+function filterRecipePicker(q){
+  const query=(q||'').toLowerCase().trim();
+  document.querySelectorAll('#rp-list .fp-item').forEach(el=>{
+    el.style.display=(!query||el.dataset.name.includes(query))?'':'none';
+  });
+}
+function addRecipeLineToMeal(mealId,recipeId){
+  document.getElementById('recipe-picker-ov')?.remove();
+  const meals=S.dayType==='ON'?S.mealsOn:S.mealsOff;
+  const meal=meals.find(m=>m.id===mealId);
+  if(!meal)return;
+  meal.lines.push({id:'rl_'+Date.now(),type:'recipe',recipeId,portions:1,isTemp:true});
+  saveLocal();
+  renderToday();
+}
+function removeRecipeLine(mealId,lineId){
+  const meals=S.dayType==='ON'?S.mealsOn:S.mealsOff;
+  const meal=meals.find(m=>m.id===mealId);
+  if(!meal)return;
+  meal.lines=meal.lines.filter(l=>l.id!==lineId);
+  saveLocal();
+  renderToday();
+}
+function onRecipePortions(inp){
+  const mealId=inp.dataset.meal,lineId=inp.dataset.line;
+  const{line}=getML(mealId,lineId);
+  if(!line||line.type!=='recipe')return;
+  line.portions=parseDecimal(inp.value)||1;
+  saveLocal();
+  const kcal=recipeLineKcal(line);
+  const mac=recipeLineMacros(line);
+  const kd=document.getElementById(`rpk-${mealId}-${lineId}`);
+  if(kd)kd.textContent=`→ ${n0(kcal)} kcal`;
+  const md=document.getElementById(`rpm-${mealId}-${lineId}`);
+  if(md)md.innerHTML=mac?`<span class="mmt pc">P ${Math.round(mac.prot)}g</span><span class="mmt-sep"> · </span><span class="mmt gc">G ${Math.round(mac.gluc)}g</span><span class="mmt-sep"> · </span><span class="mmt lc">L ${Math.round(mac.lip)}g</span>`:'';
+  refreshTodayCalcs(mealId,lineId);
 }
 function onKC(inp){
   const{line}=getML(inp.dataset.meal,inp.dataset.line);
@@ -1343,6 +1471,7 @@ function renderRecettes(){
           <div class="recette-card-info">
             <div class="recette-card-name">${r.name}</div>
             <div class="recette-card-macros">🔥 ${n0(r.totalKcal)} kcal · 💪 ${n0(r.totalProt)}g P · 🌾 ${n0(r.totalGluc)}g G · 🥑 ${n0(r.totalLip)}g L</div>
+          ${(r.portions||1)>1?`<div class="recette-card-portions">🍽️ ${r.portions} portions</div>`:''}
           </div>
           <div class="recette-card-arrow">›</div>
         </div>
@@ -1394,13 +1523,13 @@ function confirmDelRecette(id){
 }
 
 function openNewRecette(){
-  _recetteEdit={id:null,name:'',note:'',photoId:null,photoLocal:false,ingredients:[]};
+  _recetteEdit={id:null,name:'',note:'',photoId:null,photoLocal:false,portions:1,ingredients:[]};
   fillRecetteDetailUI();
   document.getElementById('recette-detail-overlay').classList.add('open');
 }
 async function openEditRecette(id){
   const r=S.recettes.find(x=>x.id===id);if(!r)return;
-  _recetteEdit={id:r.id,name:r.name,note:r.note||'',photoId:r.photoId||null,photoLocal:!!r.photoLocal,
+  _recetteEdit={id:r.id,name:r.name,note:r.note||'',photoId:r.photoId||null,photoLocal:!!r.photoLocal,portions:r.portions||1,
     ingredients:r.ingredients.map(ing=>({id:'ri_'+Math.random().toString(36).slice(2),foodId:ing.foodId,cat:ing.category,grams:ing.grams}))};
   fillRecetteDetailUI();
   document.getElementById('recette-detail-overlay').classList.add('open');
@@ -1416,6 +1545,7 @@ function closeRecetteDetail(){
 function fillRecetteDetailUI(){
   document.getElementById('recette-name').value=_recetteEdit.name;
   document.getElementById('recette-note').value=_recetteEdit.note;
+  document.getElementById('recette-portions').value=_recetteEdit.portions||1;
   document.getElementById('recette-photo-placeholder').style.display='block';
   document.getElementById('btn-delete-recette-photo').style.display='none';
   document.querySelectorAll('#recette-photo-zone img').forEach(img=>img.remove());
@@ -1590,6 +1720,7 @@ async function saveRecette(){
   const name=document.getElementById('recette-name').value.trim();
   if(!name){alert('Le nom de la recette est obligatoire.');return;}
   const note=document.getElementById('recette-note').value;
+  const portions=parseDecimal(document.getElementById('recette-portions').value)||1;
   let tK=0,tP=0,tG=0,tL=0;
   const ingredients=_recetteEdit.ingredients.filter(i=>i.foodId&&i.grams>0).map(i=>{
     const f=gf(i.foodId);const mac=cmFromGrams(i.foodId,i.grams);
@@ -1604,11 +1735,11 @@ async function saveRecette(){
   const now=Date.now();
   if(_recetteEdit.id&&S.recettes.find(r=>r.id===_recetteEdit.id)){
     const r=S.recettes.find(r=>r.id===_recetteEdit.id);
-    Object.assign(r,{name,note,photoId:_recetteEdit.photoId,photoLocal:_recetteEdit.photoLocal,ingredients,
+    Object.assign(r,{name,note,photoId:_recetteEdit.photoId,photoLocal:_recetteEdit.photoLocal,portions,ingredients,
       totalKcal:tK,totalProt:tP,totalGluc:tG,totalLip:tL,updatedAt:now});
   }else{
     S.recettes.push({id:_recetteEdit.id||('recipe_'+now),name,note,photoId:_recetteEdit.photoId,photoLocal:_recetteEdit.photoLocal,
-      ingredients,totalKcal:tK,totalProt:tP,totalGluc:tG,totalLip:tL,createdAt:now,updatedAt:now});
+      portions,ingredients,totalKcal:tK,totalProt:tP,totalGluc:tG,totalLip:tL,createdAt:now,updatedAt:now});
   }
   saveLocal();
   closeRecetteDetail();
