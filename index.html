@@ -1589,8 +1589,10 @@ function renderBrouillon(){
   html+=`<div class="brouillon-footer">
     <button class="brouillon-reset-btn" onclick="resetBrouillon()">🗑️ Vider le brouillon</button>
   </div><div class="scroll-end"></div>`;
+  const _open=new Set([...document.querySelectorAll('#tab-today .meal-card.open')].map(el=>el.id.replace('meal-','')));
   document.getElementById('tab-today').innerHTML=html;
   attachDecimalFix();
+  _open.forEach(id=>{const el=document.getElementById('meal-'+id);if(el)el.classList.add('open');});
 }
 function onKC(inp){
   const{line}=getML(inp.dataset.meal,inp.dataset.line);
