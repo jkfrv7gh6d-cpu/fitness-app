@@ -737,6 +737,20 @@ function calcDailyMacros(){
 }
 
 // ─── STORAGE ─────────────────────────────────────────────────────────────────
+// Sauvegarde locale après restauration depuis Drive.
+// N'appelle PAS schedSync() — les données viennent de Drive, pas besoin de les y renvoyer.
+// Préserve le timestamp de Drive (ne remet pas à Date.now()) pour éviter les conflits.
+function saveLocalFromDrive(driveTs){
+  localStorage.setItem('fv_foods',JSON.stringify(S.foods));
+  localStorage.setItem('fv_history',JSON.stringify(S.history));
+  localStorage.setItem('fv_settings',JSON.stringify(S.settings));
+  localStorage.setItem('fv_photoMonths',JSON.stringify(S.photoMonths));
+  localStorage.setItem('fv_recettes',JSON.stringify(S.recettes));
+  localStorage.setItem('fv_brouillon',JSON.stringify(S.brouillon));
+  localStorage.setItem('fv_today',JSON.stringify({dayType:S.dayType,mealsOn:S.mealsOn,mealsOff:S.mealsOff}));
+  localStorage.setItem('fv_lastSaved',String(driveTs||Date.now()));
+  // Pas de schedSync() ici — intentionnel
+}
 function saveLocal(){
   localStorage.setItem('fv_foods',JSON.stringify(S.foods));
   localStorage.setItem('fv_history',JSON.stringify(S.history));
@@ -1900,11 +1914,12 @@ function renderRecetteIngredients(){
   const wrap=document.getElementById('recette-ing-list');
   wrap.innerHTML=_recetteEdit.ingredients.map(ing=>{
     const mac=ing.foodId&&ing.grams?cmFromGrams(ing.foodId,ing.grams):null;
-    const opts=S.foods.filter(f=>f.cat===ing.cat).map(f=>`<option value="${f.id}"${f.id===ing.foodId?' selected':''}>${f.name}</option>`).join('');
     return`<div class="food-line">
       <div class="fl-top">
         <div class="fl-cat">${ing.cat}</div>
-        <select class="fl-sel" data-lid="${ing.id}" onchange="onRecIngFood(this)"><option value="">—</option>${opts}</select>
+        <button class="fl-sel-btn" onclick="openRecetteIngFoodPicker('${ing.id}','${ing.cat}','${ing.foodId||''}')">
+          <span class="fl-sel-lbl" id="ri-lbl-${ing.id}">${S.foods.find(f=>f.id===ing.foodId)?.name||'— Choisir —'}</span>
+        </button>
         <button class="fl-rm" onclick="removeRecetteIngredient('${ing.id}')">×</button>
       </div>
       ${recIngDualInputHtml(ing)}
@@ -1927,6 +1942,43 @@ function updateRecetteTotals(){
 // Met à jour uniquement la ligne concernée + les totaux, sans reconstruire la
 // liste : l'input/select actif ne perd jamais le focus (clavier iOS reste ouvert).
 // `which` précise le jumeau (grams|kcal) à rafraîchir — jamais celui en cours de frappe.
+function openRecetteIngFoodPicker(ingId,cat,currentFoodId){
+  document.getElementById('food-picker-ov')?.remove();
+  const foods=S.foods.filter(f=>f.cat===cat);
+  const ov=document.createElement('div');
+  ov.id='food-picker-ov';ov.className='fp-overlay';
+  ov.innerHTML=`<div class="fp-sheet">
+    <div class="fp-sheet-hdr">
+      <span class="fp-sheet-title">${cat}</span>
+      <button class="fp-close-btn" onclick="document.getElementById('food-picker-ov').remove()">✕</button>
+    </div>
+    <div class="fp-search-wrap">
+      <input id="fp-search" type="search" class="fp-search-inp" placeholder="Rechercher…" autocomplete="off" autocorrect="off" spellcheck="false" oninput="filterFoodPicker(this.value)">
+    </div>
+    <div id="fp-list" class="fp-list">
+      <div class="fp-item fp-none-item${!currentFoodId?' fp-active':''}" onclick="selectRecetteIngFood('${ingId}','')">
+        <span class="fp-name">— Aucun —</span>
+      </div>
+      ${foods.map(f=>`<div class="fp-item${f.id===currentFoodId?' fp-active':''}" onclick="selectRecetteIngFood('${ingId}','${f.id}')" data-name="${f.name.toLowerCase()}">
+        <span class="fp-name">${f.name}</span>
+        <span class="fp-kcal">${n0(f.kcal)} kcal/100g</span>
+      </div>`).join('')}
+    </div>
+  </div>`;
+  ov.addEventListener('click',e=>{if(e.target===ov)ov.remove();});
+  document.body.appendChild(ov);
+  setTimeout(()=>document.getElementById('fp-search')?.focus(),150);
+}
+function selectRecetteIngFood(ingId,foodId){
+  document.getElementById('food-picker-ov')?.remove();
+  const ing=_recetteEdit?.ingredients.find(i=>i.id===ingId);
+  if(!ing)return;
+  ing.foodId=foodId||null;
+  const lbl=document.getElementById(`ri-lbl-${ingId}`);
+  if(lbl){const food=gf(foodId);lbl.textContent=food?food.name:'— Choisir —';}
+  updateRecetteIngredientRow(ingId,'kcal');
+  updateRecetteTotals();
+}
 function updateRecetteIngredientRow(lid,which){
   const ing=_recetteEdit.ingredients.find(i=>i.id===lid);
   if(!ing)return;
@@ -2640,6 +2692,17 @@ async function checkDriveConnectionOnStart(){
     showDisconnectedBanner();
   }
 }
+// Re-synchronise depuis Drive quand l'app reprend le premier plan (switch Safari ↔ raccourci).
+// Limitée à une fois toutes les 30 secondes pour ne pas surcharger l'API.
+let _lastVisibilityLoad=0;
+document.addEventListener('visibilitychange',async()=>{
+  if(document.visibilityState!=='visible')return;
+  if(!S.driveToken||isGoogleTokenExpired())return;
+  const now=Date.now();
+  if(now-_lastVisibilityLoad<30000)return;
+  _lastVisibilityLoad=now;
+  await driveLoad();
+});
 window.addEventListener('online',async()=>{
   const wasDriveConnected=localStorage.getItem('driveConnected')==='true';
   if(!wasDriveConnected)return;
@@ -2833,7 +2896,8 @@ async function driveLoad(){
     const driveTs=d?.lastSaved||0;
     const localTs=parseInt(localStorage.getItem('fv_lastSaved')||'0');
     const localEmpty=isLocalDataEmpty();
-    if(localEmpty||driveTs>localTs){
+    const driveHasMoreContent=(d.recettes||[]).length>(S.recettes||[]).length||(d.history||[]).length>(S.history||[]).length;
+    if(localEmpty||driveTs>localTs||driveHasMoreContent){
       // Local vide (règle absolue), OU Drive plus récent → on applique ses données
       if(d.foods)S.foods=d.foods;if(d.history)S.history=d.history;
       if(d.settings)S.settings=d.settings;if(d.mealsOn)S.mealsOn=d.mealsOn;
@@ -2847,9 +2911,9 @@ async function driveLoad(){
       if(d.lipCoef!=null)localStorage.setItem('lipCoef',String(d.lipCoef));
       if(d.planRefOn)localStorage.setItem('fv_plan_reference_ON',JSON.stringify(d.planRefOn));
       if(d.planRefOff)localStorage.setItem('fv_plan_reference_OFF',JSON.stringify(d.planRefOff));
-      saveLocal();
+      saveLocalFromDrive(driveTs);
       renderTab(S.activeTab);
-      console.log(localEmpty?'Données restaurées depuis Google Drive (local vide)':'Données restaurées depuis Google Drive (plus récentes)');
+      console.log(localEmpty?'Données restaurées depuis Google Drive (local vide)':driveHasMoreContent?'Données restaurées depuis Google Drive (contenu plus riche)':'Données restaurées depuis Google Drive (plus récentes)');
     }else{
       // Local plus récent ou égal, et non vide → on garde le local et on réuploade
       drivePush();
