@@ -1759,13 +1759,20 @@ async function analyzeWithGemini(){
   const parts=[{text:PROMPT}];
   _iaPhotos.forEach(b64=>{parts.push({inlineData:{mimeType:'image/jpeg',data:b64.replace(/^data:image\/[a-z+]+;base64,/,'')}});});
   try{
-    const resp=await fetch(GEMINI_API_URL+'?key='+key,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:[{parts}],generationConfig:{temperature:0.1}})});
+    const resp=await fetch(GEMINI_API_URL+'?key='+key,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:[{parts}],generationConfig:{temperature:0.1,responseMimeType:'application/json'}})});
     if(!resp.ok){showIAError(geminiErrorMsg(resp.status));return;}
     const data=await resp.json();
     const raw=(data?.candidates?.[0]?.content?.parts?.[0]?.text||'').replace(/```json\n?|\n?```/g,'').trim();
     const result=JSON.parse(raw);
     _iaResult=result;showIAResult(result);
-  }catch(e){showIAError('Erreur lors de l\'analyse. Vérifie ta connexion et réessaie.');console.warn('Gemini:',e);}
+  }catch(e){
+    console.warn('Gemini:',e);
+    if(e instanceof SyntaxError){
+      showIAError('Réponse inattendue de Gemini. Réessaie — ça fonctionne généralement au 2e essai.');
+    }else{
+      showIAError('Erreur de connexion. Vérifie ta connexion internet et réessaie.');
+    }
+  }
 }
 function geminiErrorMsg(status){
   if(status===429)return'Limite de requêtes Gemini atteinte.\nRéessaie dans quelques minutes, ou demain si la limite journalière est atteinte.';
