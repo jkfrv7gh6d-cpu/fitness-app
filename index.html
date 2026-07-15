@@ -376,6 +376,49 @@ table.tgt td:first-child{text-align:left;font-size:12px;color:var(--t2);padding-
 .sync-modal-btn.danger{background:var(--red);color:#fff}
 @keyframes spin{to{transform:rotate(360deg)}}
 .sync-spinner{display:inline-block;width:36px;height:36px;border:3px solid rgba(255,255,255,.15);border-top-color:#fff;border-radius:50%;animation:spin .8s linear infinite;margin-bottom:16px}
+/* ─── ANALYSE IA (GEMINI VISION) ────────────────────────────────────────── */
+.ia-photo-btn{background:rgba(255,255,255,.08);border:none;color:var(--text);font-size:13px;padding:7px 14px;border-radius:20px;cursor:pointer;margin-left:8px;font-weight:500;}
+.ia-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9999;display:flex;flex-direction:column;}
+.ia-sheet{background:#1c1c1e;flex:1;display:flex;flex-direction:column;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);}
+.ia-hdr{display:flex;align-items:center;justify-content:space-between;padding:16px 18px;border-bottom:1px solid rgba(255,255,255,.1);}
+.ia-title{font-size:17px;font-weight:600;color:var(--text);}
+.ia-body{flex:1;overflow-y:auto;padding:16px;}
+.ia-hint{font-size:13px;color:var(--t3);margin:0 0 14px;line-height:1.5;}
+.ia-photo-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px;}
+.ia-photo-slot{aspect-ratio:1;border-radius:10px;overflow:hidden;position:relative;cursor:pointer;}
+.ia-photo-filled{background:#2c2c2e;}
+.ia-photo-filled img{width:100%;height:100%;object-fit:cover;}
+.ia-photo-add{background:rgba(255,255,255,.07);border:1.5px dashed rgba(255,255,255,.2);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;}
+.ia-photo-rm{position:absolute;top:4px;right:4px;background:rgba(0,0,0,.6);border:none;color:#fff;width:22px;height:22px;border-radius:50%;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1;}
+.ia-context-inp{width:100%;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);border-radius:10px;color:var(--text);font-size:14px;padding:10px 12px;resize:none;box-sizing:border-box;margin-bottom:14px;font-family:inherit;}
+.ia-analyze-btn{width:100%;padding:14px;border-radius:12px;border:none;background:var(--blue);color:#fff;font-size:16px;font-weight:600;cursor:pointer;}
+.ia-analyze-btn:disabled{opacity:.4;cursor:not-allowed;}
+.ia-error{color:#FF453A;font-size:13px;padding:10px 0;line-height:1.5;white-space:pre-line;}
+.ia-result-meal{font-size:17px;font-weight:700;color:var(--text);margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid rgba(255,255,255,.1);}
+.ia-result-foods{margin-bottom:14px;}
+.ia-result-food-item{display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.06);}
+.ia-result-food-item .ia-food-name{font-size:14px;color:var(--text);flex:1;}
+.ia-result-food-item .ia-food-detail{font-size:13px;color:var(--t3);margin-left:8px;white-space:nowrap;}
+.ia-totals{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;}
+.ia-total-pill{padding:8px 14px;border-radius:20px;background:rgba(255,255,255,.08);font-size:14px;color:var(--text);}
+.ia-total-pill.kcal-c{background:rgba(255,69,58,.15);color:#FF453A;}
+.ia-total-pill.pc{background:rgba(100,210,255,.12);color:#64D2FF;}
+.ia-total-pill.gc{background:rgba(255,214,10,.12);color:#FFD60A;}
+.ia-total-pill.lc{background:rgba(255,159,10,.12);color:var(--orange);}
+.ia-note{font-size:12px;color:var(--t3);margin-bottom:14px;font-style:italic;line-height:1.4;}
+.ia-portion-row{display:flex;align-items:center;gap:8px;margin-bottom:16px;flex-wrap:wrap;}
+.ia-portion-lbl{font-size:13px;color:var(--t3);}
+.ia-portion-btn{padding:7px 14px;border-radius:20px;border:1.5px solid rgba(255,255,255,.2);background:transparent;color:var(--text);font-size:14px;cursor:pointer;}
+.ia-portion-btn.active{background:var(--blue);border-color:var(--blue);color:#fff;font-weight:600;}
+.ia-add-btn{width:100%;padding:14px;border-radius:12px;border:none;background:var(--green);color:#fff;font-size:16px;font-weight:600;cursor:pointer;margin-bottom:10px;}
+.ia-retry-btn{width:100%;padding:12px;border-radius:12px;border:1.5px solid rgba(255,255,255,.2);background:transparent;color:var(--t3);font-size:14px;cursor:pointer;}
+/* Repas analysé dans le brouillon */
+.ia-analyzed-card .meal-hdr{border-left:3px solid var(--blue);}
+.ia-analyzed-list{padding:8px 0 4px;}
+.ia-analyzed-item{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.05);}
+.ia-analyzed-item .ia-food-name{font-size:14px;color:var(--text);flex:1;}
+.ia-analyzed-item .ia-food-detail{font-size:13px;color:var(--t3);white-space:nowrap;margin-left:8px;}
+.ia-rm-meal-btn{margin-top:10px;padding:8px 16px;border-radius:20px;border:1.5px solid rgba(255,69,58,.4);background:transparent;color:#FF453A;font-size:13px;cursor:pointer;width:100%;}
 </style>
 </head>
 <body>
@@ -653,6 +696,9 @@ let S={
 let DB,gsiReady=false;
 let driveFolderIdCache=null;
 let _brouillonOpen=false;
+const GEMINI_MODEL='gemini-2.0-flash';
+const GEMINI_API_URL='https://generativelanguage.googleapis.com/v1beta/models/'+GEMINI_MODEL+':generateContent';
+let _iaPhotos=[];let _iaPortions=1;let _iaResult=null;
 
 // ─── UTILS ───────────────────────────────────────────────────────────────────
 function tds(){return new Date().toISOString().split('T')[0]}
@@ -1001,6 +1047,8 @@ function mealMacrosHtml(meal){
     if(l.type==='recipe'){
       const mac=recipeLineMacros(l);
       if(mac){P+=mac.prot;G+=mac.gluc;L+=mac.lip;}
+    }else if(l.type==='analyzed'){
+      P+=(l.prot||0);G+=(l.gluc||0);L+=(l.lip||0);
     }else{
       if(l.foodId&&l.kcal){const m=cm(l.foodId,l.kcal);if(m){P+=m.prot;G+=m.gluc;L+=m.lip;}}
     }
@@ -1082,7 +1130,7 @@ function renderToday(){
     <button class="dt-btn${S.dayType==='ON'?' on':''}" onclick="setDT('ON')">☀️ JOUR ON</button>
     <button class="dt-btn${S.dayType==='OFF'?' off':''}" onclick="setDT('OFF')">🌙 JOUR OFF</button>
   </div>
-  <div class="brouillon-link-wrap"><button class="brouillon-link" onclick="openBrouillon()">✏️ Brouillon</button></div>
+  <div class="brouillon-link-wrap"><button class="brouillon-link" onclick="openBrouillon()">✏️ Brouillon</button><button class="ia-photo-btn" onclick="openIAAnalyzer()">📷 Analyser</button></div>
   <div class="card" style="margin-bottom:10px">
     <div class="gauges-row" id="today-gauges">${gaugesBlockHtml()}</div>
   </div>`;
@@ -1350,6 +1398,7 @@ function brouillonTotals(){
   let tK=0,tP=0,tG=0,tL=0;
   S.brouillon.meals.forEach(m=>m.lines.forEach(l=>{
     if(l.type==='recipe'){tK+=recipeLineKcal(l);const mac=recipeLineMacros(l);if(mac){tP+=mac.prot;tG+=mac.gluc;tL+=mac.lip;}}
+    else if(l.type==='analyzed'){tK+=(l.kcal||0);tP+=(l.prot||0);tG+=(l.gluc||0);tL+=(l.lip||0);}
     else{tK+=(l.kcal||0);if(l.foodId&&l.kcal){const r=cm(l.foodId,l.kcal);tP+=r.prot;tG+=r.gluc;tL+=r.lip;}}
   }));
   return{tK,tP,tG,tL};
@@ -1551,6 +1600,29 @@ function renderBrouillon(){
     <div class="gauges-row" id="brouillon-gauges">${brouillonGaugesHtml()}</div>
   </div>`;
   meals.forEach(meal=>{
+    if(meal.isAnalyzed){
+      const totalK=meal.lines.reduce((s,l)=>s+(l.kcal||0),0);
+      const totalP=meal.lines.reduce((s,l)=>s+(l.prot||0),0);
+      const totalG=meal.lines.reduce((s,l)=>s+(l.gluc||0),0);
+      const totalL=meal.lines.reduce((s,l)=>s+(l.lip||0),0);
+      html+=`<div class="card meal-card ia-analyzed-card" id="meal-${meal.id}">
+        <div class="meal-hdr" onclick="toggleMeal('${meal.id}')">
+          <span class="meal-icon">📷</span>
+          <div class="meal-info">
+            <div class="meal-name">${meal.name}</div>
+            <div class="meal-kcal-row"><span class="meal-cur">${n0(totalK)}</span><span class="meal-tgt"> kcal · estimé IA</span></div>
+            <div class="meal-macros-row"><span class="mmt pc">P ${nf(totalP,1)}g</span><span class="mmt-sep"> · </span><span class="mmt gc">G ${nf(totalG,1)}g</span><span class="mmt-sep"> · </span><span class="mmt lc">L ${nf(totalL,1)}g</span></div>
+          </div><span class="chev">▼</span>
+        </div>
+        <div class="meal-body">
+          <div class="ia-analyzed-list">
+            ${meal.lines.map(l=>`<div class="ia-analyzed-item"><span class="ia-food-name">${l.name}</span><span class="ia-food-detail">~${n0(l.qty)}g · ${n0(l.kcal)} kcal</span></div>`).join('')}
+          </div>
+          <button class="ia-rm-meal-btn" onclick="removeIAMealFromBrouillon('${meal.id}')">🗑️ Supprimer ce repas</button>
+        </div>
+      </div>`;
+      return;
+    }
     html+=`<div class="card meal-card" id="meal-${meal.id}">
       <div class="meal-hdr" onclick="toggleMeal('${meal.id}')">
         <span class="meal-icon">${meal.icon}</span>
@@ -1607,6 +1679,143 @@ function renderBrouillon(){
   document.getElementById('tab-today').innerHTML=html;
   attachDecimalFix();
   _open.forEach(id=>{const el=document.getElementById('meal-'+id);if(el)el.classList.add('open');});
+}
+// ─── ANALYSE IA (GEMINI VISION) ──────────────────────────────────────────────
+function openIAAnalyzer(){
+  const key=localStorage.getItem('geminiApiKey')||'';
+  if(!key){alert('Clé API Gemini non configurée.\nVa dans Paramètres → Analyse IA (Gemini) pour la saisir.');return;}
+  _iaPhotos=[];_iaPortions=1;_iaResult=null;
+  const ov=document.createElement('div');
+  ov.id='ia-overlay';ov.className='ia-overlay';
+  ov.innerHTML=`<div class="ia-sheet">
+    <div class="ia-hdr">
+      <span class="ia-title">📷 Analyser un repas</span>
+      <button class="fp-close-btn" onclick="closeIAOverlay()">✕</button>
+    </div>
+    <div class="ia-body">
+      <div id="ia-screen-pick">
+        <p class="ia-hint">Ajoute jusqu'à 6 photos du même repas pour plus de précision.</p>
+        <div class="ia-photo-grid" id="ia-photo-grid"></div>
+        <textarea class="ia-context-inp" id="ia-context" placeholder="Contexte optionnel : taille des portions, type de plat… (améliore la précision)" rows="2"></textarea>
+        <button class="ia-analyze-btn" id="ia-analyze-btn" onclick="analyzeWithGemini()" disabled>🔍 Analyser</button>
+      </div>
+      <div id="ia-screen-result" style="display:none"></div>
+    </div>
+  </div>`;
+  document.body.appendChild(ov);
+  renderIAPhotoGrid();
+}
+function closeIAOverlay(){document.getElementById('ia-overlay')?.remove();}
+function renderIAPhotoGrid(){
+  const grid=document.getElementById('ia-photo-grid');if(!grid)return;
+  let html=_iaPhotos.map((b64,i)=>`<div class="ia-photo-slot ia-photo-filled">
+    <img src="${b64}" alt="">
+    <button class="ia-photo-rm" onclick="removeIAPhoto(${i})">×</button>
+  </div>`).join('');
+  if(_iaPhotos.length<6)html+=`<div class="ia-photo-slot ia-photo-add" onclick="pickIAPhoto()"><span style="font-size:28px">📷</span><span style="font-size:12px;color:var(--t3)">Ajouter</span></div>`;
+  grid.innerHTML=html;
+  const btn=document.getElementById('ia-analyze-btn');
+  if(btn)btn.disabled=_iaPhotos.length===0;
+}
+function pickIAPhoto(){
+  const inp=document.createElement('input');inp.type='file';inp.accept='image/*';inp.multiple=true;
+  inp.onchange=async()=>{
+    const files=[...inp.files].slice(0,6-_iaPhotos.length);
+    for(const f of files){const b64=await fileToDataURL(f);_iaPhotos.push(b64);if(_iaPhotos.length>=6)break;}
+    renderIAPhotoGrid();
+  };inp.click();
+}
+function removeIAPhoto(i){_iaPhotos.splice(i,1);renderIAPhotoGrid();}
+async function analyzeWithGemini(){
+  const key=localStorage.getItem('geminiApiKey')||'';
+  if(!key||!_iaPhotos.length)return;
+  const btn=document.getElementById('ia-analyze-btn');
+  if(btn){btn.disabled=true;btn.textContent='⏳ Analyse en cours…';}
+  document.getElementById('ia-error-msg')?.remove();
+  const context=(document.getElementById('ia-context')?.value||'').trim();
+  const PROMPT='Tu es un expert en nutrition sportive. Analyse ce repas (toutes les photos fournies) et estime ses valeurs nutritionnelles avec la plus grande précision possible.\n\nRéponds UNIQUEMENT avec du JSON valide, sans texte avant ou après, avec cette structure exacte:\n{"plat":"nom court du repas","aliments":[{"nom":"aliment","quantite_g":150,"kcal":200,"prot_g":10,"gluc_g":25,"lip_g":5}],"total":{"kcal":850,"prot_g":45,"gluc_g":90,"lip_g":25},"note":"incertitude ou commentaire si nécessaire"}\n\nArrondis toutes les valeurs à l\'entier le plus proche. Inclus chaque aliment visible.'+(context?'\n\nContexte fourni : '+context:'');
+  const parts=[{text:PROMPT}];
+  _iaPhotos.forEach(b64=>{parts.push({inlineData:{mimeType:'image/jpeg',data:b64.replace(/^data:image\/[a-z+]+;base64,/,'')}});});
+  try{
+    const resp=await fetch(GEMINI_API_URL+'?key='+key,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:[{parts}],generationConfig:{temperature:0.1}})});
+    if(!resp.ok){showIAError(geminiErrorMsg(resp.status));return;}
+    const data=await resp.json();
+    const raw=(data?.candidates?.[0]?.content?.parts?.[0]?.text||'').replace(/```json\n?|\n?```/g,'').trim();
+    const result=JSON.parse(raw);
+    _iaResult=result;showIAResult(result);
+  }catch(e){showIAError('Erreur lors de l\'analyse. Vérifie ta connexion et réessaie.');console.warn('Gemini:',e);}
+}
+function geminiErrorMsg(status){
+  if(status===429)return'Limite de requêtes Gemini atteinte.\nRéessaie dans quelques minutes, ou demain si la limite journalière est atteinte.';
+  if(status===401||status===403)return'Clé API invalide ou non autorisée.\nVérifie ta clé dans Paramètres → Analyse IA.';
+  if(status===400)return'Photos illisibles ou format non supporté.\nEssaie avec d\'autres photos.';
+  return'Erreur de connexion. Vérifie ta connexion internet et réessaie.';
+}
+function showIAError(msg){
+  const screen=document.getElementById('ia-screen-pick');if(!screen)return;
+  let el=document.getElementById('ia-error-msg');
+  if(!el){el=document.createElement('div');el.id='ia-error-msg';el.className='ia-error';screen.appendChild(el);}
+  el.textContent=msg;
+  const btn=document.getElementById('ia-analyze-btn');if(btn){btn.disabled=false;btn.textContent='🔍 Analyser';}
+}
+function showIAResult(result){
+  const pickScr=document.getElementById('ia-screen-pick');
+  const resScr=document.getElementById('ia-screen-result');
+  if(pickScr)pickScr.style.display='none';if(!resScr)return;
+  resScr.style.display='block';
+  const tot=result.total||{};
+  resScr.innerHTML=`<div class="ia-result-meal">📷 ${result.plat||'Repas analysé'}</div>
+    <div class="ia-result-foods">
+      ${(result.aliments||[]).map(a=>`<div class="ia-result-food-item"><span class="ia-food-name">${a.nom}</span><span class="ia-food-detail">~${n0(a.quantite_g||0)}g · ${n0(a.kcal||0)} kcal</span></div>`).join('')}
+    </div>
+    <div class="ia-totals">
+      <div class="ia-total-pill kcal-c">🔥 <strong>${n0((tot.kcal||0)*_iaPortions)}</strong> kcal</div>
+      <div class="ia-total-pill pc">P <strong>${nf((tot.prot_g||0)*_iaPortions,1)}</strong>g</div>
+      <div class="ia-total-pill gc">G <strong>${nf((tot.gluc_g||0)*_iaPortions,1)}</strong>g</div>
+      <div class="ia-total-pill lc">L <strong>${nf((tot.lip_g||0)*_iaPortions,1)}</strong>g</div>
+    </div>
+    ${result.note?`<div class="ia-note">ℹ️ ${result.note}</div>`:''}
+    <div class="ia-portion-row">
+      <span class="ia-portion-lbl">Portions :</span>
+      ${['0.5','1','1.5','2'].map(v=>`<button class="ia-portion-btn${_iaPortions==v?' active':''}" onclick="updateIAPortions(${v})">${v==='0.5'?'×½':'×'+v}</button>`).join('')}
+    </div>
+    <button class="ia-add-btn" onclick="addIAMealToBrouillon()">➕ Ajouter au brouillon</button>
+    <button class="ia-retry-btn" onclick="retryIAAnalysis()">🔄 Recommencer avec d'autres photos</button>`;
+}
+function updateIAPortions(mul){_iaPortions=parseFloat(mul);showIAResult(_iaResult);}
+function retryIAAnalysis(){
+  const pickScr=document.getElementById('ia-screen-pick');
+  const resScr=document.getElementById('ia-screen-result');
+  if(resScr)resScr.style.display='none';if(pickScr)pickScr.style.display='block';
+  const btn=document.getElementById('ia-analyze-btn');if(btn){btn.disabled=_iaPhotos.length===0;btn.textContent='🔍 Analyser';}
+}
+function addIAMealToBrouillon(){
+  if(!_iaResult)return;
+  if(!S.brouillon){
+    const baseMeals=dc(S.dayType==='ON'?S.mealsOn:S.mealsOff);
+    baseMeals.forEach(m=>{m.lines=m.lines.filter(l=>l.type!=='recipe');});
+    S.brouillon={base:S.dayType,meals:baseMeals};
+  }
+  const mul=_iaPortions;
+  const meal={
+    id:'ia_'+Date.now(),name:'📷 '+(_iaResult.plat||'Repas analysé'),
+    icon:'📷',isAnalyzed:true,targetKcal:0,
+    lines:(_iaResult.aliments||[]).map((a,i)=>({
+      id:'ial_'+Date.now()+'_'+i,type:'analyzed',name:a.nom||'Aliment',
+      qty:Math.round((a.quantite_g||0)*mul),
+      kcal:Math.round((a.kcal||0)*mul),
+      prot:Math.round((a.prot_g||0)*mul*10)/10,
+      gluc:Math.round((a.gluc_g||0)*mul*10)/10,
+      lip:Math.round((a.lip_g||0)*mul*10)/10
+    }))
+  };
+  S.brouillon.meals.push(meal);
+  _brouillonOpen=true;closeIAOverlay();saveBrouillon();renderToday();
+}
+function removeIAMealFromBrouillon(mealId){
+  if(!S.brouillon)return;
+  S.brouillon.meals=S.brouillon.meals.filter(m=>m.id!==mealId);
+  saveBrouillon();renderBrouillon();
 }
 function onKC(inp){
   const{line}=getML(inp.dataset.meal,inp.dataset.line);
@@ -2509,6 +2718,11 @@ function renderSettings(){
     <div class="tgt-total" id="tgt-total-off">Total Jour OFF&nbsp;: <span>${n0(s.targetsOff.reduce((a,t)=>a+(t.kcal||0),0))}</span> kcal</div>
   </div></div>
 
+  <div class="set-sec"><div class="set-title">🤖 Analyse IA (Gemini)</div><div class="card" style="padding:14px 14px 4px">
+    <div class="set-row"><span class="set-lbl">Clé API Gemini</span>
+      <input class="set-inp" type="text" inputmode="text" placeholder="AIzaSy…" value="${localStorage.getItem('geminiApiKey')||''}" oninput="localStorage.setItem('geminiApiKey',this.value.trim())"></div>
+    <p style="font-size:12px;color:var(--t3);margin:4px 0 12px;line-height:1.5">Clé gratuite sur <strong>aistudio.google.com</strong> → Clés API → Créer une clé API.</p>
+  </div></div>
   <div class="set-sec"><div class="set-title">Google Drive</div><div class="card"><div class="drive-box">
     <div class="drive-status${S.driveToken?' ok':''}">${S.driveToken?'✅ Connecté à Google Drive':'Non connecté'}</div>
     ${S.driveToken
