@@ -1759,15 +1759,17 @@ async function analyzeWithGemini(){
   const parts=[{text:PROMPT}];
   _iaPhotos.forEach(b64=>{parts.push({inlineData:{mimeType:'image/jpeg',data:b64.replace(/^data:image\/[a-z+]+;base64,/,'')}});});
   try{
-    const resp=await fetch(GEMINI_API_URL+'?key='+key,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:[{parts}],generationConfig:{temperature:0.1,responseMimeType:'application/json'}})});
+    const resp=await fetch(GEMINI_API_URL+'?key='+key,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:[{parts}],generationConfig:{temperature:0.1,responseMimeType:'application/json'},thinkingConfig:{thinkingBudget:0}})});
     if(!resp.ok){showIAError(geminiErrorMsg(resp.status));return;}
     const data=await resp.json();
-    const raw=(data?.candidates?.[0]?.content?.parts?.[0]?.text||'').replace(/```json\n?|\n?```/g,'').trim();
+    const parts_out=data?.candidates?.[0]?.content?.parts||[];
+    const textPart=parts_out.find(p=>!p.thought&&p.text)||parts_out[parts_out.length-1];
+    const raw=(textPart?.text||'').replace(/```json\n?|\n?```/g,'').trim();
+    if(!raw){showIAError('Réponse vide de Gemini. Réessaie avec des photos plus nettes.');const b=document.getElementById('ia-analyze-btn');if(b){b.disabled=false;b.textContent='🔍 Analyser';}return;}
     const result=JSON.parse(raw);
     _iaResult=result;showIAResult(result);
   }catch(e){
     console.warn('Gemini:',e);
-    alert('DEBUG ERREUR:\n' + e.name + ': ' + e.message + '\n\nStack:\n' + (e.stack||'').slice(0,200));
     showIAError('Erreur de connexion. Vérifie ta connexion internet et réessaie.');
   }
 }
