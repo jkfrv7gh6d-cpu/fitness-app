@@ -696,7 +696,7 @@ let S={
 let DB,gsiReady=false;
 let driveFolderIdCache=null;
 let _brouillonOpen=false;
-const GEMINI_MODEL='gemini-2.5-flash';
+const GEMINI_MODEL='gemini-1.5-flash';
 const GEMINI_API_URL='https://generativelanguage.googleapis.com/v1beta/models/'+GEMINI_MODEL+':generateContent';
 let _iaPhotos=[];let _iaPortions=1;let _iaResult=null;
 
@@ -1759,7 +1759,7 @@ async function analyzeWithGemini(){
   const parts=[{text:PROMPT}];
   _iaPhotos.forEach(b64=>{parts.push({inlineData:{mimeType:'image/jpeg',data:b64.replace(/^data:image\/[a-z+]+;base64,/,'')}});});
   try{
-    const resp=await fetch(GEMINI_API_URL+'?key='+key,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:[{parts}],generationConfig:{temperature:0.1,responseMimeType:'application/json'}})});
+    const resp=await fetch(GEMINI_API_URL+'?key='+key,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:[{parts}],generationConfig:{temperature:0.1}})});
     if(!resp.ok){showIAError(geminiErrorMsg(resp.status));return;}
     const data=await resp.json();
     const parts_out=data?.candidates?.[0]?.content?.parts||[];
@@ -1770,7 +1770,11 @@ async function analyzeWithGemini(){
     _iaResult=result;showIAResult(result);
   }catch(e){
     console.warn('Gemini:',e);
-    showIAError('Erreur de connexion. Vérifie ta connexion internet et réessaie.');
+    if(e instanceof SyntaxError){
+      showIAError('Réponse invalide de Gemini. Réessaie — ça fonctionne généralement au 2e essai.');
+    }else{
+      showIAError('Erreur réseau ('+e.name+'). Vérifie ta connexion et réessaie.');
+    }
   }
 }
 function geminiErrorMsg(status){
