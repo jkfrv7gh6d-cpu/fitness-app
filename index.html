@@ -1767,11 +1767,8 @@ async function analyzeWithGemini(){
     _iaResult=result;showIAResult(result);
   }catch(e){
     console.warn('Gemini:',e);
-    if(e instanceof SyntaxError){
-      showIAError('Réponse inattendue de Gemini. Réessaie — ça fonctionne généralement au 2e essai.');
-    }else{
-      showIAError('Erreur de connexion. Vérifie ta connexion internet et réessaie.');
-    }
+    alert('DEBUG ERREUR:\n' + e.name + ': ' + e.message + '\n\nStack:\n' + (e.stack||'').slice(0,200));
+    showIAError('Erreur de connexion. Vérifie ta connexion internet et réessaie.');
   }
 }
 function geminiErrorMsg(status){
