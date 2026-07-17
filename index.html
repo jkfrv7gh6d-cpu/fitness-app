@@ -2413,6 +2413,8 @@ function drawChart(){
   const xf=i=>p.l+i/(entries.length-1)*cW,yf=w=>p.t+cH-(w-mn)/(mx-mn)*cH;
   ctx.strokeStyle='rgba(255,255,255,.05)';ctx.lineWidth=1;
   for(let i=0;i<=4;i++){const y=p.t+cH/4*i;ctx.beginPath();ctx.moveTo(p.l,y);ctx.lineTo(W-p.r,y);ctx.stroke();ctx.fillStyle='rgba(255,255,255,.32)';ctx.font='10px -apple-system';ctx.textAlign='right';ctx.fillText(nf(mx-(mx-mn)/4*i,1),p.l-2,y+4);}
+  const firstDate=new Date(entries[0].dateRaw||entries[0].date);const lastDate=new Date(entries[entries.length-1].dateRaw||entries[entries.length-1].date);const totalMs=lastDate-firstDate;
+  if(totalMs>0){const firstMon=new Date(firstDate);const dOff=(8-firstMon.getDay())%7||7;firstMon.setDate(firstMon.getDate()+dOff);ctx.strokeStyle='rgba(255,255,255,.08)';ctx.lineWidth=1;ctx.setLineDash([3,4]);let d=new Date(firstMon);while(d<=lastDate){const x=p.l+(d-firstDate)/totalMs*cW;ctx.beginPath();ctx.moveTo(x,p.t);ctx.lineTo(x,H-p.b);ctx.stroke();d.setDate(d.getDate()+7);}ctx.setLineDash([]);}
   const gr=ctx.createLinearGradient(0,p.t,0,H-p.b);gr.addColorStop(0,'rgba(48,209,88,.45)');gr.addColorStop(1,'rgba(48,209,88,0)');
   ctx.beginPath();ctx.moveTo(xf(0),yf(ws[0]));entries.forEach((_,i)=>{if(i>0)ctx.lineTo(xf(i),yf(ws[i]))});
   ctx.lineTo(xf(entries.length-1),H-p.b);ctx.lineTo(xf(0),H-p.b);ctx.closePath();ctx.fillStyle=gr;ctx.fill();
