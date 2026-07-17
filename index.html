@@ -116,7 +116,7 @@ input[type=date]::-webkit-calendar-picker-indicator{filter:invert(1);opacity:.6;
 .fp-search-wrap{padding:0 14px 10px}
 .fp-search-inp{width:100%;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);border-radius:10px;padding:10px 14px;color:var(--text);font-size:15px;box-sizing:border-box;-webkit-appearance:none}
 .fp-search-inp:focus{outline:none;border-color:var(--blue)}
-.fp-list{overflow-y:auto;flex:1}
+.fp-list{overflow-y:auto;flex:1;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
 .fp-item{display:flex;justify-content:space-between;align-items:center;padding:13px 16px;border-bottom:1px solid rgba(255,255,255,.06);cursor:pointer}
 .fp-item:active{background:rgba(255,255,255,.08)}
 .fp-active{background:rgba(48,209,88,.12)}
@@ -1026,7 +1026,7 @@ function mealProgHtml(meal){
   const diff=mK-tgKcal;
   const ok=Math.abs(diff)<=15;
   const prog=Math.min(100,(mK/tgKcal)*100);
-  const progColor=ok&&mK>0?'var(--green)':mK>tgKcal?'var(--red)':'var(--blue)';
+  const progColor=ok&&mK>0?'var(--green)':mK>tgKcal?'var(--red)':'var(--orange)';
   return`<div class="prog-wrap"><div class="prog" style="width:${prog}%;background:${progColor}"></div></div>`;
 }
 function foodLineMacrosHtml(mac){
@@ -1155,7 +1155,7 @@ function gaugeHtml(id,ico,cur,tgt,unit,name){
   const pct=Math.min(ratio,1);
   const c=188.5; // 2π×30
   const offset=c*(1-pct);
-  const col=ratio<0.5?'#0A84FF':ratio<0.85?'#30D158':ratio<=1?'#FF9F0A':'#FF453A';
+  const col=ratio<0.5?'#0A84FF':ratio<0.95?'#FF9F0A':ratio<=1.05?'#30D158':'#FF453A';
   return`<div class="gauge-wrap" id="${id}">
     <div class="gauge-ring">
       <svg viewBox="0 0 72 72" width="72" height="72">
