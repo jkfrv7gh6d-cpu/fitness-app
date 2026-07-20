@@ -212,6 +212,15 @@ input[type=date]::-webkit-calendar-picker-indicator{filter:invert(1);opacity:.6;
 .brouillon-footer{padding:14px 0 4px;display:flex;justify-content:center}
 .brouillon-reset-btn{background:rgba(255,69,58,.1);border:1px solid rgba(255,69,58,.25);border-radius:14px;color:var(--red);font-size:14px;padding:11px 22px;cursor:pointer}
 .recette-card-portions{font-size:11px;color:var(--t3);margin-top:2px}
+.recette-cat-badge{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;margin-top:4px}
+.recette-cat-badge.sucre{background:rgba(255,159,10,.15);color:#FF9F0A;border:1px solid rgba(255,159,10,.3)}
+.recette-cat-badge.sale{background:rgba(10,132,255,.15);color:#0A84FF;border:1px solid rgba(10,132,255,.3)}
+.recette-filter-row{display:flex;gap:8px;margin-bottom:14px}
+.recette-filter-btn{flex:1;padding:9px 0;border-radius:20px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.07);color:var(--t2);font-size:13px;font-weight:600;cursor:pointer;transition:var(--ease)}
+.recette-filter-btn.active{background:rgba(255,255,255,.18);color:#fff;border-color:rgba(255,255,255,.3)}
+.recette-cat-form-row{display:flex;align-items:center;justify-content:space-between;padding:10px 0;margin-bottom:10px;border-top:1px solid rgba(255,255,255,.06)}
+.recette-cat-form-lbl{font-size:13px;color:var(--t2)}
+.recette-cat-sel{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);border-radius:8px;color:var(--text);font-size:14px;font-weight:600;padding:7px 12px;-webkit-appearance:none;text-align:right}
 
 .recette-detail-overlay{position:fixed;inset:0;background:#0f0f1a;z-index:1500;display:none;flex-direction:column}
 .recette-detail-overlay.open{display:flex}
@@ -477,6 +486,13 @@ table.tgt td:first-child{text-align:left;font-size:12px;color:var(--t2);padding-
     <div class="recette-portions-form-row">
       <span class="recette-portions-form-lbl">🍽️ Nombre de portions</span>
       <input id="recette-portions" type="text" inputmode="decimal" pattern="[0-9.,]*" value="1" placeholder="1" class="recette-portions-form-inp">
+    </div>
+    <div class="recette-cat-form-row">
+      <span class="recette-cat-form-lbl">🏷️ Catégorie</span>
+      <select id="recette-cat" class="recette-cat-sel">
+        <option value="salé">🧂 Salé</option>
+        <option value="sucré">🍬 Sucré</option>
+      </select>
     </div>
     <div class="recette-ingredients-card">
       <div class="recette-ing-title">Ingrédients</div>
@@ -1773,21 +1789,34 @@ function cmFromGrams(foodId,grams){
 }
 let _recetteEdit=null; // état d'édition en cours (null quand l'overlay est fermé)
 
+let _recetteFilter=_recetteFilter||'tout';
 function renderRecettes(){
   const list=S.recettes||[];
+  const filtered=_recetteFilter==='tout'?list:list.filter(r=>(r.category||'salé')===_recetteFilter);
   let html=`<div class="recettes-header"><button class="btn-nouvelle-recette" onclick="openNewRecette()">+ Nouvelle recette</button></div>`;
-  if(!list.length){
-    html+=`<div class="recettes-empty"><p>Aucune recette enregistrée</p><p>Appuyez sur "+ Nouvelle recette" pour commencer</p></div>`;
+  if(list.length>0){
+    html+=`<div class="recette-filter-row">
+      <button class="recette-filter-btn${_recetteFilter==='tout'?' active':''}" onclick="_recetteFilter='tout';renderRecettes()">Tout</button>
+      <button class="recette-filter-btn${_recetteFilter==='salé'?' active':''}" onclick="_recetteFilter='salé';renderRecettes()">🧂 Salé</button>
+      <button class="recette-filter-btn${_recetteFilter==='sucré'?' active':''}" onclick="_recetteFilter='sucré';renderRecettes()">🍬 Sucré</button>
+    </div>`;
+  }
+  if(!filtered.length){
+    html+=`<div class="recettes-empty"><p>${list.length?'Aucune recette dans cette catégorie':'Aucune recette enregistrée'}</p>${!list.length?'<p>Appuyez sur &quot;+ Nouvelle recette&quot; pour commencer</p>':''}</div>`;
   }else{
     html+=`<div class="recettes-list">`;
-    list.forEach(r=>{
+    filtered.forEach(r=>{
+      const cat=r.category||'salé';
+      const badgeClass=cat==='sucré'?'sucre':'sale';
+      const badgeTxt=cat==='sucré'?'🍬 Sucré':'🧂 Salé';
       html+=`<div class="recette-outer" data-rid="${r.id}">
         <div class="recette-card">
           <div class="recette-card-photo" id="rc-photo-${r.id}">🍽️</div>
           <div class="recette-card-info">
             <div class="recette-card-name">${r.name}</div>
             <div class="recette-card-macros">🔥 ${n0(r.totalKcal)} kcal · 💪 ${n0(r.totalProt)}g P · 🌾 ${n0(r.totalGluc)}g G · 🥑 ${n0(r.totalLip)}g L</div>
-          ${(r.portions||1)>1?`<div class="recette-card-portions">🍽️ ${r.portions} portions</div>`:''}
+            ${(r.portions||1)>1?`<div class="recette-card-portions">🍽️ ${r.portions} portions</div>`:''}
+            <div class="recette-cat-badge ${badgeClass}">${badgeTxt}</div>
           </div>
           <div class="recette-card-arrow">›</div>
         </div>
@@ -1839,13 +1868,13 @@ function confirmDelRecette(id){
 }
 
 function openNewRecette(){
-  _recetteEdit={id:null,name:'',note:'',photoId:null,photoLocal:false,portions:1,ingredients:[]};
+  _recetteEdit={id:null,name:'',note:'',photoId:null,photoLocal:false,portions:1,category:'salé',ingredients:[]};
   fillRecetteDetailUI();
   document.getElementById('recette-detail-overlay').classList.add('open');
 }
 async function openEditRecette(id){
   const r=S.recettes.find(x=>x.id===id);if(!r)return;
-  _recetteEdit={id:r.id,name:r.name,note:r.note||'',photoId:r.photoId||null,photoLocal:!!r.photoLocal,portions:r.portions||1,
+  _recetteEdit={id:r.id,name:r.name,note:r.note||'',photoId:r.photoId||null,photoLocal:!!r.photoLocal,portions:r.portions||1,category:r.category||'salé',
     ingredients:r.ingredients.map(ing=>({id:'ri_'+Math.random().toString(36).slice(2),foodId:ing.foodId,cat:ing.category,grams:ing.grams}))};
   fillRecetteDetailUI();
   document.getElementById('recette-detail-overlay').classList.add('open');
@@ -1862,6 +1891,7 @@ function fillRecetteDetailUI(){
   document.getElementById('recette-name').value=_recetteEdit.name;
   document.getElementById('recette-note').value=_recetteEdit.note;
   document.getElementById('recette-portions').value=_recetteEdit.portions||1;
+  document.getElementById('recette-cat').value=_recetteEdit.category||'salé';
   document.getElementById('recette-photo-placeholder').style.display='block';
   document.getElementById('btn-delete-recette-photo').style.display='none';
   document.querySelectorAll('#recette-photo-zone img').forEach(img=>img.remove());
@@ -2075,6 +2105,7 @@ async function saveRecette(){
   if(!name){alert('Le nom de la recette est obligatoire.');return;}
   const note=document.getElementById('recette-note').value;
   const portions=parseDecimal(document.getElementById('recette-portions').value)||1;
+  const category=document.getElementById('recette-cat').value||'salé';
   let tK=0,tP=0,tG=0,tL=0;
   const ingredients=_recetteEdit.ingredients.filter(i=>i.foodId&&i.grams>0).map(i=>{
     const f=gf(i.foodId);const mac=cmFromGrams(i.foodId,i.grams);
@@ -2089,11 +2120,11 @@ async function saveRecette(){
   const now=Date.now();
   if(_recetteEdit.id&&S.recettes.find(r=>r.id===_recetteEdit.id)){
     const r=S.recettes.find(r=>r.id===_recetteEdit.id);
-    Object.assign(r,{name,note,photoId:_recetteEdit.photoId,photoLocal:_recetteEdit.photoLocal,portions,ingredients,
+    Object.assign(r,{name,note,photoId:_recetteEdit.photoId,photoLocal:_recetteEdit.photoLocal,portions,category,ingredients,
       totalKcal:tK,totalProt:tP,totalGluc:tG,totalLip:tL,updatedAt:now});
   }else{
     S.recettes.push({id:_recetteEdit.id||('recipe_'+now),name,note,photoId:_recetteEdit.photoId,photoLocal:_recetteEdit.photoLocal,
-      portions,ingredients,totalKcal:tK,totalProt:tP,totalGluc:tG,totalLip:tL,createdAt:now,updatedAt:now});
+      portions,category,ingredients,totalKcal:tK,totalProt:tP,totalGluc:tG,totalLip:tL,createdAt:now,updatedAt:now});
   }
   saveLocal();
   closeRecetteDetail();
