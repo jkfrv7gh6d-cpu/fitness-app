@@ -1789,7 +1789,7 @@ function cmFromGrams(foodId,grams){
 }
 let _recetteEdit=null; // état d'édition en cours (null quand l'overlay est fermé)
 
-let _recetteFilter=_recetteFilter||'tout';
+let _recetteFilter='tout';
 function renderRecettes(){
   const list=S.recettes||[];
   const filtered=_recetteFilter==='tout'?list:list.filter(r=>(r.category||'salé')===_recetteFilter);
