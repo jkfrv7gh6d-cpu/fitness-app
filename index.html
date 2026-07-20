@@ -1984,17 +1984,37 @@ function recIngMacrosHtml(mac){
     <div class="fl-mac"><div class="fl-mac-l" style="color:#FFD60A">G</div><div class="fl-mac-v gc" data-k="gluc">${mac?nf(mac.gluc,1):''}</div></div>
     <div class="fl-mac"><div class="fl-mac-l" style="color:var(--orange)">L</div><div class="fl-mac-v lc" data-k="lip">${mac?nf(mac.lip,1):''}</div></div>`;
 }
+function toggleRecIngPortionMode(lid){
+  const inp=document.querySelector(`.grams-input[data-lid="${lid}"]`);
+  if(!inp)return;
+  const portion=parseDecimal(inp.dataset.portion);
+  if(!portion)return;
+  const unitLbl=inp.parentElement.querySelector('.portion-unit-lbl');
+  const currentMode=inp.dataset.mode||'grams';
+  const currentVal=parseDecimal(inp.value);
+  if(currentMode==='grams'){
+    inp.dataset.mode='portions';
+    if(unitLbl)unitLbl.textContent='×';
+    inp.value=currentVal>0?nf(currentVal/portion,2):'';
+  }else{
+    inp.dataset.mode='grams';
+    if(unitLbl)unitLbl.textContent='g';
+    inp.value=currentVal>0?nf(currentVal*portion,1):'';
+  }
+}
 // Recettes : grammes = valeur de référence sauvegardée (ing.grams). Le kcal
 // est dérivé à la volée pour l'affichage, jamais stocké.
 function recIngDualInputHtml(ing){
   const food=gf(ing.foodId);
   const kcalPer100=food?food.kcal:0;
   const canKcal=!!(food&&kcalPer100>0);
+  const hasPortion=!!(food&&food.portion>0);
   const kcalVal=canKcal&&ing.grams?n0(ing.grams/100*kcalPer100):'';
+  const toggleBtn=hasPortion?`<button class="portion-toggle" onclick="toggleRecIngPortionMode('${ing.id}')">⇄</button>`:'';
   return`<div class="dual-input-row">
     <div class="input-field-wrap">
-      <input class="grams-input" type="text" inputmode="decimal" pattern="[0-9.,]*" value="${ing.grams||''}" placeholder="0" data-lid="${ing.id}" oninput="onRecIngGrams(this)">
-      <span class="input-unit">g</span>
+      <input class="grams-input" type="text" inputmode="decimal" pattern="[0-9.,]*" value="${ing.grams||''}" placeholder="0" data-lid="${ing.id}" data-mode="grams" data-portion="${hasPortion?food.portion:''}" oninput="onRecIngGrams(this)">
+      <span class="input-unit portion-unit-lbl">g</span>${toggleBtn}
     </div>
     <span class="input-sep">=</span>
     <div class="input-field-wrap">
@@ -2088,7 +2108,10 @@ function updateRecetteIngredientRow(lid,which){
     }
   }else if(which==='grams'){
     const el=document.querySelector(`.grams-input[data-lid="${lid}"]`);
-    if(el)el.value=ing.grams||'';
+    if(el){
+      const portion=parseDecimal(el.dataset.portion);
+      el.value=(el.dataset.mode==='portions'&&portion)?nf(ing.grams/portion,2):(ing.grams||'');
+    }
   }
   updateRecetteTotals();
 }
@@ -2106,7 +2129,11 @@ function onRecIngFood(sel){
 }
 function onRecIngGrams(inp){
   const ing=_recetteEdit.ingredients.find(i=>i.id===inp.dataset.lid);
-  if(ing){ing.grams=parseDecimal(inp.value);updateRecetteIngredientRow(inp.dataset.lid,'kcal');}
+  if(!ing)return;
+  const val=parseDecimal(inp.value);
+  const portion=parseDecimal(inp.dataset.portion);
+  ing.grams=(inp.dataset.mode==='portions'&&portion)?val*portion:val;
+  updateRecetteIngredientRow(inp.dataset.lid,'kcal');
 }
 // Champ kcal (dérivé) modifié → recalcule et sauvegarde les grammes correspondants
 function onRecIngKcal(inp){
