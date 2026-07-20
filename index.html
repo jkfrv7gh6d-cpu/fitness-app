@@ -138,6 +138,8 @@ input[type=date]::-webkit-calendar-picker-indicator{filter:invert(1);opacity:.6;
 .input-field-wrap input:disabled{color:var(--t3)}
 .input-unit{font-size:11px;color:rgba(255,255,255,.4);white-space:nowrap;flex-shrink:0}
 .input-sep{font-size:12px;color:rgba(255,255,255,.25);flex-shrink:0}
+.portion-toggle{background:none;border:1px solid rgba(255,255,255,.15);border-radius:6px;color:rgba(255,255,255,.45);font-size:11px;padding:3px 6px;cursor:pointer;flex-shrink:0;line-height:1;-webkit-tap-highlight-color:transparent}
+.portion-toggle:active{background:rgba(255,255,255,.1)}
 
 /* Add-line row */
 .add-line-row{display:flex;flex-wrap:wrap;gap:5px;margin-top:9px;padding-top:9px;border-top:1px solid rgba(255,255,255,.05)}
@@ -434,6 +436,7 @@ table.tgt td:first-child{text-align:left;font-size:12px;color:var(--t2);padding-
     <div class="mf"><div class="ml">Glucides / 100g</div><input class="mi" id="f-gluc" type="text" inputmode="decimal" pattern="[0-9.,]*" placeholder="0"></div>
     <div class="mf"><div class="ml">Lipides / 100g</div><input class="mi" id="f-lip" type="text" inputmode="decimal" pattern="[0-9.,]*" placeholder="0"></div>
     <div class="mf"><div class="ml">Protéines / 100g</div><input class="mi" id="f-prot" type="text" inputmode="decimal" pattern="[0-9.,]*" placeholder="0"></div>
+    <div class="mf"><div class="ml">1 portion = (g) <span style="font-size:11px;color:rgba(255,255,255,.4)">optionnel</span></div><input class="mi" id="f-portion" type="text" inputmode="decimal" pattern="[0-9.,]*" placeholder="ex : 40"></div>
     <div class="m-actions">
       <button class="btn" onclick="closeModal('modal-food')">Annuler</button>
       <button class="btn btn-blue" onclick="saveFood()">Enregistrer</button>
@@ -1059,18 +1062,38 @@ function foodLineMacrosHtml(mac){
     <div class="fl-mac"><div class="fl-mac-l" style="color:#FFD60A">G</div><div class="fl-mac-v gc" data-k="gluc">${mac?nf(mac.gluc,1):''}</div></div>
     <div class="fl-mac"><div class="fl-mac-l" style="color:var(--orange)">L</div><div class="fl-mac-v lc" data-k="lip">${mac?nf(mac.lip,1):''}</div></div>`;
 }
+function togglePortionMode(mealId,lineId,ctx){
+  const inp=document.querySelector(`.grams-input[data-meal="${mealId}"][data-line="${lineId}"]`);
+  if(!inp)return;
+  const portion=parseDecimal(inp.dataset.portion);
+  if(!portion)return;
+  const unitLbl=inp.parentElement.querySelector('.portion-unit-lbl');
+  const currentMode=inp.dataset.mode||'grams';
+  const currentVal=parseDecimal(inp.value);
+  if(currentMode==='grams'){
+    inp.dataset.mode='portions';
+    if(unitLbl)unitLbl.textContent='×';
+    inp.value=currentVal>0?nf(currentVal/portion,2):'';
+  }else{
+    inp.dataset.mode='grams';
+    if(unitLbl)unitLbl.textContent='g';
+    inp.value=currentVal>0?nf(currentVal*portion,1):'';
+  }
+}
 // Aujourd'hui : kcal = valeur de référence sauvegardée (line.kcal). Les grammes
 // sont dérivés à la volée pour l'affichage, jamais stockés.
 function todayDualInputHtml(mealId,line){
   const food=gf(line.foodId);
   const kcalPer100=food?food.kcal:0;
   const canGrams=!!(food&&kcalPer100>0);
+  const hasPortion=!!(food&&food.portion>0);
   const gramsVal=canGrams&&line.kcal?nf((line.kcal/kcalPer100)*100,1):'';
+  const toggleBtn=hasPortion?`<button class="portion-toggle" onclick="togglePortionMode('${mealId}','${line.id}','today')">⇄</button>`:'';
   return`<div class="dual-input-row">
     <div class="input-field-wrap">
       <input class="grams-input" type="text" inputmode="decimal" pattern="[0-9.,]*" value="${gramsVal}" placeholder="${canGrams?'0':'—'}"
-        data-meal="${mealId}" data-line="${line.id}" oninput="onGramsChangeToday(this)"${canGrams?'':' disabled'}>
-      <span class="input-unit">g</span>
+        data-meal="${mealId}" data-line="${line.id}" data-mode="grams" data-portion="${hasPortion?food.portion:''}" oninput="onGramsChangeToday(this)"${canGrams?'':' disabled'}>
+      <span class="input-unit portion-unit-lbl">g</span>${toggleBtn}
     </div>
     <span class="input-sep">=</span>
     <div class="input-field-wrap">
@@ -1091,7 +1114,11 @@ function updateTodaySiblingInput(mealId,lineId,which){
     const el=document.querySelector(`.grams-input[data-meal="${mealId}"][data-line="${lineId}"]`);
     if(!el)return;
     el.disabled=!canGrams;
-    el.value=canGrams&&line.kcal?nf((line.kcal/food.kcal)*100,1):'';
+    if(canGrams&&line.kcal){
+      const gramsRaw=(line.kcal/food.kcal)*100;
+      const portion=parseDecimal(el.dataset.portion);
+      el.value=(el.dataset.mode==='portions'&&portion)?nf(gramsRaw/portion,2):nf(gramsRaw,1);
+    }else{el.value='';}
   }else{
     const el=document.querySelector(`.kcal-input[data-meal="${mealId}"][data-line="${lineId}"]`);
     if(el)el.value=line.kcal||'';
@@ -1397,12 +1424,14 @@ function brouillonDualInputHtml(mealId,line){
   const food=gf(line.foodId);
   const kcalPer100=food?food.kcal:0;
   const canGrams=!!(food&&kcalPer100>0);
+  const hasPortion=!!(food&&food.portion>0);
   const gramsVal=canGrams&&line.kcal?nf((line.kcal/kcalPer100)*100,1):'';
+  const toggleBtn=hasPortion?`<button class="portion-toggle" onclick="togglePortionMode('${mealId}','${line.id}','brouillon')">⇄</button>`:'';
   return`<div class="dual-input-row">
     <div class="input-field-wrap">
       <input class="grams-input" type="text" inputmode="decimal" pattern="[0-9.,]*" value="${gramsVal}" placeholder="${canGrams?'0':'—'}"
-        data-meal="${mealId}" data-line="${line.id}" oninput="onBGramsChange(this)"${canGrams?'':' disabled'}>
-      <span class="input-unit">g</span>
+        data-meal="${mealId}" data-line="${line.id}" data-mode="grams" data-portion="${hasPortion?food.portion:''}" oninput="onBGramsChange(this)"${canGrams?'':' disabled'}>
+      <span class="input-unit portion-unit-lbl">g</span>${toggleBtn}
     </div>
     <span class="input-sep">=</span>
     <div class="input-field-wrap">
@@ -1418,7 +1447,11 @@ function updateBrouillonSiblingInput(mealId,lineId,which){
   if(which==='grams'){
     const el=document.querySelector(`.grams-input[data-meal="${mealId}"][data-line="${lineId}"]`);
     if(!el)return;el.disabled=!canGrams;
-    el.value=canGrams&&line.kcal?nf((line.kcal/food.kcal)*100,1):'';
+    if(canGrams&&line.kcal){
+      const gramsRaw=(line.kcal/food.kcal)*100;
+      const portion=parseDecimal(el.dataset.portion);
+      el.value=(el.dataset.mode==='portions'&&portion)?nf(gramsRaw/portion,2):nf(gramsRaw,1);
+    }else{el.value='';}
   }else{
     const el=document.querySelector(`.kcal-input[data-meal="${mealId}"][data-line="${lineId}"]`);
     if(el)el.value=line.kcal||'';
@@ -1445,7 +1478,9 @@ function onBKC(inp){
 function onBGramsChange(inp){
   const{line}=getBML(inp.dataset.meal,inp.dataset.line);if(!line)return;
   const food=gf(line.foodId);if(!food||!food.kcal)return;
-  const grams=parseDecimal(inp.value);
+  const val=parseDecimal(inp.value);
+  const portion=parseDecimal(inp.dataset.portion);
+  const grams=(inp.dataset.mode==='portions'&&portion)?val*portion:val;
   line.kcal=grams?Math.round(grams/100*food.kcal):0;
   saveBrouillon();
   updateBrouillonSiblingInput(inp.dataset.meal,inp.dataset.line,'kcal');
@@ -1645,8 +1680,10 @@ function onGramsChangeToday(inp){
   const{line}=getML(inp.dataset.meal,inp.dataset.line);
   if(!line)return;
   const food=gf(line.foodId);
-  if(!food||!food.kcal)return; // désactivé dans ce cas, garde-fou
-  const g=parseDecimal(inp.value);
+  if(!food||!food.kcal)return;
+  const val=parseDecimal(inp.value);
+  const portion=parseDecimal(inp.dataset.portion);
+  const g=(inp.dataset.mode==='portions'&&portion)?val*portion:val;
   line.kcal=Math.round(g/100*food.kcal);
   saveLocal();
   updateTodaySiblingInput(inp.dataset.meal,inp.dataset.line,'kcal');
@@ -1755,7 +1792,7 @@ let _editFoodId=null;
 function openAddFood(){
   _aC='Protéine';_editFoodId=null;
   document.getElementById('food-modal-title').textContent='Ajouter un aliment';
-  ['f-name','f-kcal','f-gluc','f-lip','f-prot'].forEach(id=>document.getElementById(id).value='');
+  ['f-name','f-kcal','f-gluc','f-lip','f-prot','f-portion'].forEach(id=>document.getElementById(id).value='');
   document.querySelectorAll('.cpb').forEach(b=>b.classList.toggle('active',b.dataset.cat===_aC));
   document.getElementById('modal-food').classList.add('open');
 }
@@ -1768,6 +1805,7 @@ function openEditFood(id){
   document.getElementById('f-gluc').value=f.gluc;
   document.getElementById('f-lip').value=f.lip;
   document.getElementById('f-prot').value=f.prot;
+  document.getElementById('f-portion').value=f.portion||'';
   document.querySelectorAll('.cpb').forEach(b=>b.classList.toggle('active',b.dataset.cat===_aC));
   document.getElementById('modal-food').classList.add('open');
 }
@@ -1778,10 +1816,12 @@ function saveFood(){
   const name=document.getElementById('f-name').value.trim();
   const kcal=parseDecimal(document.getElementById('f-kcal').value);
   if(!name||!kcal){alert('Nom et kcal obligatoires');return;}
+  const portionVal=parseDecimal(document.getElementById('f-portion').value);
   const vals={name,cat:_aC,kcal,
     gluc:parseDecimal(document.getElementById('f-gluc').value),
     lip:parseDecimal(document.getElementById('f-lip').value),
-    prot:parseDecimal(document.getElementById('f-prot').value)};
+    prot:parseDecimal(document.getElementById('f-prot').value),
+    portion:portionVal>0?portionVal:null};
   if(_editFoodId){
     const f=gf(_editFoodId);
     if(f)Object.assign(f,vals);
