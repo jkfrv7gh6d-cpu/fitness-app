@@ -1234,20 +1234,72 @@ function gaugeHtml(id,ico,cur,tgt,unit,name){
 function initSwipeDay(){
   const el=document.getElementById('tab-today');
   if(!el)return;
-  let x0=0,y0=0,active=false;
+  let x0=0,y0=0,active=false,dragging=false;
   el.addEventListener('touchstart',e=>{
     if(e.target.closest('.food-outer,.fp-overlay,.brouillon-banner'))return;
-    x0=e.touches[0].clientX;y0=e.touches[0].clientY;active=true;
+    x0=e.touches[0].clientX;y0=e.touches[0].clientY;
+    active=true;dragging=false;
+    const wrap=document.getElementById('meals-slide-wrap');
+    if(wrap)wrap.style.transition='none';
+  },{passive:true});
+  el.addEventListener('touchmove',e=>{
+    if(!active)return;
+    const dx=e.touches[0].clientX-x0;
+    const dy=e.touches[0].clientY-y0;
+    if(!dragging){
+      if(Math.abs(dx)<8)return;
+      if(Math.abs(dy)>Math.abs(dx)*1.2){active=false;return;}
+      dragging=true;
+    }
+    if(_brouillonOpen)return;
+    const wrap=document.getElementById('meals-slide-wrap');
+    if(!wrap)return;
+    wrap.style.transform=`translateX(${dx*0.4}px)`;
+    wrap.style.opacity=String(Math.max(0.15,1-Math.abs(dx)/200));
   },{passive:true});
   el.addEventListener('touchend',e=>{
-    if(!active)return;active=false;
-    if(_brouillonOpen)return;
+    if(!active)return;
+    const wasDragging=dragging;
+    active=false;dragging=false;
+    if(!wasDragging||_brouillonOpen)return;
     const dx=e.changedTouches[0].clientX-x0;
-    const dy=e.changedTouches[0].clientY-y0;
-    if(Math.abs(dx)<80||Math.abs(dx)<Math.abs(dy)*2)return;
-    setDT(S.dayType==='ON'?'OFF':'ON',dx<0?'left':'right');
+    const wrap=document.getElementById('meals-slide-wrap');
+    if(!wrap)return;
+    if(Math.abs(dx)>=60){
+      const outX=dx<0?'-35%':'35%';
+      const inX=dx<0?'35%':'-35%';
+      wrap.style.transition='transform .15s ease,opacity .15s ease';
+      wrap.style.transform=`translateX(${outX})`;
+      wrap.style.opacity='0';
+      setTimeout(()=>{
+        S.dayType=S.dayType==='ON'?'OFF':'ON';
+        saveLocal();renderToday();
+        const nw=document.getElementById('meals-slide-wrap');
+        if(nw){
+          nw.style.transition='none';
+          nw.style.transform=`translateX(${inX})`;
+          nw.style.opacity='0';
+          nw.getBoundingClientRect();
+          nw.style.transition='transform .22s ease,opacity .22s ease';
+          nw.style.transform='translateX(0)';
+          nw.style.opacity='1';
+        }
+      },150);
+    }else{
+      wrap.style.transition='transform .2s ease,opacity .2s ease';
+      wrap.style.transform='translateX(0)';
+      wrap.style.opacity='1';
+    }
   },{passive:true});
-  el.addEventListener('touchcancel',()=>{active=false;},{passive:true});
+  el.addEventListener('touchcancel',()=>{
+    active=false;dragging=false;
+    const wrap=document.getElementById('meals-slide-wrap');
+    if(wrap){
+      wrap.style.transition='transform .2s ease,opacity .2s ease';
+      wrap.style.transform='translateX(0)';
+      wrap.style.opacity='1';
+    }
+  },{passive:true});
 }
 function setDT(t,dir){
   if(t===S.dayType)return;
