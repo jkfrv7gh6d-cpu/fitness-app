@@ -1400,9 +1400,11 @@ function selectFoodFromPicker(mealId,lineId,foodId){
   const lbl=document.getElementById(`fl-lbl-${mealId}-${lineId}`);
   if(lbl){const food=gf(foodId);lbl.textContent=food?food.name:'— Choisir —';}
 }
+let _rpCatFilter='tout';
 function openRecipePicker(mealId){
   document.getElementById('recipe-picker-ov')?.remove();
   if(!S.recettes.length){alert('Aucune recette enregistrée. Créez d\'abord une recette dans l\'onglet Recettes.');return;}
+  _rpCatFilter='tout';
   const ov=document.createElement('div');
   ov.id='recipe-picker-ov';
   ov.className='fp-overlay';
@@ -1414,8 +1416,13 @@ function openRecipePicker(mealId){
     <div class="fp-search-wrap">
       <input id="rp-search" type="search" class="fp-search-inp" placeholder="Rechercher une recette…" autocomplete="off" autocorrect="off" spellcheck="false" oninput="filterRecipePicker(this.value)">
     </div>
+    <div class="recette-filter-row" style="padding:0 14px 10px;margin-bottom:0;flex-shrink:0">
+      <button class="recette-filter-btn active" data-cat="tout" onclick="filterRecipePickerByCat('tout')">Tout</button>
+      <button class="recette-filter-btn" data-cat="salé" onclick="filterRecipePickerByCat('salé')">🧂 Salé</button>
+      <button class="recette-filter-btn" data-cat="sucré" onclick="filterRecipePickerByCat('sucré')">🍬 Sucré</button>
+    </div>
     <div id="rp-list" class="fp-list">
-      ${S.recettes.map(r=>`<div class="fp-item" onclick="addRecipeLineToMeal('${mealId}','${r.id}')" data-name="${r.name.toLowerCase()}">
+      ${S.recettes.map(r=>`<div class="fp-item" onclick="addRecipeLineToMeal('${mealId}','${r.id}')" data-name="${r.name.toLowerCase()}" data-cat="${r.category||'salé'}">
         <div style="flex:1;min-width:0">
           <div class="fp-name">${r.name}</div>
           <div class="fp-kcal">${n0(r.totalKcal)} kcal${(r.portions||1)>1?' · '+(r.portions)+' portions':''} · P${n0(r.totalProt)}g G${n0(r.totalGluc)}g L${n0(r.totalLip)}g</div>
@@ -1430,8 +1437,17 @@ function openRecipePicker(mealId){
 function filterRecipePicker(q){
   const query=(q||'').toLowerCase().trim();
   document.querySelectorAll('#rp-list .fp-item').forEach(el=>{
-    el.style.display=(!query||el.dataset.name.includes(query))?'':'none';
+    const matchesQuery=!query||el.dataset.name.includes(query);
+    const matchesCat=_rpCatFilter==='tout'||el.dataset.cat===_rpCatFilter;
+    el.style.display=(matchesQuery&&matchesCat)?'':'none';
   });
+}
+function filterRecipePickerByCat(cat){
+  _rpCatFilter=cat;
+  document.querySelectorAll('#recipe-picker-ov .recette-filter-btn').forEach(b=>{
+    b.classList.toggle('active',b.dataset.cat===cat);
+  });
+  filterRecipePicker(document.getElementById('rp-search')?.value||'');
 }
 function addRecipeLineToMeal(mealId,recipeId){
   document.getElementById('recipe-picker-ov')?.remove();
@@ -1630,6 +1646,7 @@ function removeBrouillonLine(mealId,lineId){
 function openBrouillonRecipePicker(mealId){
   document.getElementById('recipe-picker-ov')?.remove();
   if(!S.recettes.length){alert('Aucune recette enregistrée. Créez d\'abord une recette dans l\'onglet Recettes.');return;}
+  _rpCatFilter='tout';
   const ov=document.createElement('div');
   ov.id='recipe-picker-ov';ov.className='fp-overlay';
   ov.innerHTML=`<div class="fp-sheet">
@@ -1640,8 +1657,13 @@ function openBrouillonRecipePicker(mealId){
     <div class="fp-search-wrap">
       <input id="rp-search" type="search" class="fp-search-inp" placeholder="Rechercher une recette…" autocomplete="off" oninput="filterRecipePicker(this.value)">
     </div>
+    <div class="recette-filter-row" style="padding:0 14px 10px;margin-bottom:0;flex-shrink:0">
+      <button class="recette-filter-btn active" data-cat="tout" onclick="filterRecipePickerByCat('tout')">Tout</button>
+      <button class="recette-filter-btn" data-cat="salé" onclick="filterRecipePickerByCat('salé')">🧂 Salé</button>
+      <button class="recette-filter-btn" data-cat="sucré" onclick="filterRecipePickerByCat('sucré')">🍬 Sucré</button>
+    </div>
     <div id="rp-list" class="fp-list">
-      ${S.recettes.map(r=>`<div class="fp-item" onclick="addBrouillonRecipeLine('${mealId}','${r.id}')" data-name="${r.name.toLowerCase()}">
+      ${S.recettes.map(r=>`<div class="fp-item" onclick="addBrouillonRecipeLine('${mealId}','${r.id}')" data-name="${r.name.toLowerCase()}" data-cat="${r.category||'salé'}">
         <div style="flex:1;min-width:0">
           <div class="fp-name">${r.name}</div>
           <div class="fp-kcal">${n0(r.totalKcal)} kcal${(r.portions||1)>1?' · '+(r.portions)+' portions':''} · P${n0(r.totalProt)}g G${n0(r.totalGluc)}g L${n0(r.totalLip)}g</div>
