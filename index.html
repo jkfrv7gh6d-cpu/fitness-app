@@ -951,6 +951,7 @@ function adjustScrollPadding(){
   });
 }
 document.addEventListener('DOMContentLoaded',adjustScrollPadding);
+document.addEventListener('DOMContentLoaded',initSwipeDay);
 window.addEventListener('resize',adjustScrollPadding);
 window.addEventListener('orientationchange',()=>setTimeout(adjustScrollPadding,150));
 
@@ -1225,6 +1226,24 @@ function gaugeHtml(id,ico,cur,tgt,unit,name){
   </div>`;
 }
 
+function initSwipeDay(){
+  const el=document.getElementById('tab-today');
+  if(!el)return;
+  let x0=0,y0=0,active=false;
+  el.addEventListener('touchstart',e=>{
+    if(e.target.closest('.food-outer,.fp-overlay,.brouillon-banner'))return;
+    x0=e.touches[0].clientX;y0=e.touches[0].clientY;active=true;
+  },{passive:true});
+  el.addEventListener('touchend',e=>{
+    if(!active)return;active=false;
+    if(_brouillonOpen)return;
+    const dx=e.changedTouches[0].clientX-x0;
+    const dy=e.changedTouches[0].clientY-y0;
+    if(Math.abs(dx)<80||Math.abs(dx)<Math.abs(dy)*2)return;
+    setDT(S.dayType==='ON'?'OFF':'ON');
+  },{passive:true});
+  el.addEventListener('touchcancel',()=>{active=false;},{passive:true});
+}
 function setDT(t){S.dayType=t;saveLocal();renderToday()}
 function toggleMeal(id){document.getElementById('meal-'+id)?.classList.toggle('open')}
 
