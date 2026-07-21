@@ -138,6 +138,10 @@ input[type=date]::-webkit-calendar-picker-indicator{filter:invert(1);opacity:.6;
 .input-field-wrap input:disabled{color:var(--t3)}
 .input-unit{font-size:11px;color:rgba(255,255,255,.4);white-space:nowrap;flex-shrink:0}
 .input-sep{font-size:12px;color:rgba(255,255,255,.25);flex-shrink:0}
+@keyframes slideMealsOutLeft{from{transform:translateX(0);opacity:1}to{transform:translateX(-30%);opacity:0}}
+@keyframes slideMealsOutRight{from{transform:translateX(0);opacity:1}to{transform:translateX(30%);opacity:0}}
+@keyframes slideMealsInLeft{from{transform:translateX(30%);opacity:0}to{transform:translateX(0);opacity:1}}
+@keyframes slideMealsInRight{from{transform:translateX(-30%);opacity:0}to{transform:translateX(0);opacity:1}}
 .portion-toggle{background:none;border:1px solid rgba(255,255,255,.15);border-radius:6px;color:rgba(255,255,255,.45);font-size:11px;padding:3px 6px;cursor:pointer;flex-shrink:0;line-height:1;-webkit-tap-highlight-color:transparent}
 .portion-toggle:active{background:rgba(255,255,255,.1)}
 
@@ -1138,7 +1142,7 @@ function renderToday(){
   <div class="card" style="margin-bottom:10px">
     <div class="gauges-row" id="today-gauges">${gaugesBlockHtml()}</div>
   </div>`;
-
+  html+='<div id="meals-slide-wrap">';
   meals.forEach(meal=>{
     html+=`<div class="card meal-card" id="meal-${meal.id}">
       <div class="meal-hdr" onclick="toggleMeal('${meal.id}')">
@@ -1197,6 +1201,7 @@ function renderToday(){
     <button id="btn-restaurer-plan" class="plan-ref-btn restaurer" onclick="restaurerPlan()">↩ Restaurer mon plan</button>
     <button id="btn-enregistrer-plan" class="plan-ref-btn enregistrer" onclick="enregistrerPlan()">💾 Enregistrer comme plan habituel</button>
   </div>`;
+  html+='</div>';
   html+=`<div class="scroll-end"></div>`;
   document.getElementById('tab-today').innerHTML=html;
   attachDecimalFix();
@@ -1240,11 +1245,27 @@ function initSwipeDay(){
     const dx=e.changedTouches[0].clientX-x0;
     const dy=e.changedTouches[0].clientY-y0;
     if(Math.abs(dx)<80||Math.abs(dx)<Math.abs(dy)*2)return;
-    setDT(S.dayType==='ON'?'OFF':'ON');
+    setDT(S.dayType==='ON'?'OFF':'ON',dx<0?'left':'right');
   },{passive:true});
   el.addEventListener('touchcancel',()=>{active=false;},{passive:true});
 }
-function setDT(t){S.dayType=t;saveLocal();renderToday()}
+function setDT(t,dir){
+  if(t===S.dayType)return;
+  const resolvedDir=dir||(S.dayType==='ON'?'left':'right');
+  const wrap=document.getElementById('meals-slide-wrap');
+  if(wrap){
+    const outAnim=resolvedDir==='left'?'slideMealsOutLeft':'slideMealsOutRight';
+    const inAnim=resolvedDir==='left'?'slideMealsInLeft':'slideMealsInRight';
+    wrap.style.animation=`${outAnim} .18s ease forwards`;
+    setTimeout(()=>{
+      S.dayType=t;saveLocal();renderToday();
+      const newWrap=document.getElementById('meals-slide-wrap');
+      if(newWrap)newWrap.style.animation=`${inAnim} .22s ease forwards`;
+    },180);
+  }else{
+    S.dayType=t;saveLocal();renderToday();
+  }
+}
 function toggleMeal(id){document.getElementById('meal-'+id)?.classList.toggle('open')}
 
 function getML(mId,lId){
