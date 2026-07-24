@@ -1077,7 +1077,7 @@ function togglePortionMode(mealId,lineId,ctx){
   const currentVal=parseDecimal(inp.value);
   if(currentMode==='grams'){
     inp.dataset.mode='portions';
-    if(unitLbl)unitLbl.textContent='×';
+    if(unitLbl)unitLbl.textContent='port.';
     inp.value=currentVal>0?nf(currentVal/portion,2):'';
   }else{
     inp.dataset.mode='grams';
@@ -1395,6 +1395,8 @@ function selectFoodFromPicker(mealId,lineId,foodId){
   if(!line)return;
   line.foodId=foodId||null;
   saveLocal();
+  const dualRow=document.querySelector(`.grams-input[data-meal="${mealId}"][data-line="${lineId}"]`)?.closest('.dual-input-row');
+  if(dualRow)dualRow.outerHTML=todayDualInputHtml(mealId,line);
   updateTodaySiblingInput(mealId,lineId,'grams');
   refreshTodayCalcs(mealId,lineId);
   const lbl=document.getElementById(`fl-lbl-${mealId}-${lineId}`);
@@ -1626,6 +1628,8 @@ function selectBrouillonFood(mealId,lineId,foodId){
   const{line}=getBML(mealId,lineId);if(!line)return;
   line.foodId=foodId||null;
   saveBrouillon();
+  const dualRow=document.querySelector(`.grams-input[data-meal="${mealId}"][data-line="${lineId}"]`)?.closest('.dual-input-row');
+  if(dualRow)dualRow.outerHTML=brouillonDualInputHtml(mealId,line);
   updateBrouillonSiblingInput(mealId,lineId,'grams');
   refreshBrouillonCalcs(mealId,lineId);
   const lbl=document.getElementById(`fl-lbl-${mealId}-${lineId}`);
@@ -2108,7 +2112,7 @@ function toggleRecIngPortionMode(lid){
   const currentVal=parseDecimal(inp.value);
   if(currentMode==='grams'){
     inp.dataset.mode='portions';
-    if(unitLbl)unitLbl.textContent='×';
+    if(unitLbl)unitLbl.textContent='port.';
     inp.value=currentVal>0?nf(currentVal/portion,2):'';
   }else{
     inp.dataset.mode='grams';
@@ -2203,6 +2207,8 @@ function selectRecetteIngFood(ingId,foodId){
   ing.foodId=foodId||null;
   const lbl=document.getElementById(`ri-lbl-${ingId}`);
   if(lbl){const food=gf(foodId);lbl.textContent=food?food.name:'— Choisir —';}
+  const dualRow=document.querySelector(`.grams-input[data-lid="${ingId}"]`)?.closest('.dual-input-row');
+  if(dualRow)dualRow.outerHTML=recIngDualInputHtml(ing);
   updateRecetteIngredientRow(ingId,'kcal');
   updateRecetteTotals();
 }
